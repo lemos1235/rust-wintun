@@ -13,6 +13,7 @@
 //  0. You just DO WHAT THE FUCK YOU WANT TO.
 
 use std::net::Ipv4Addr;
+#[cfg(unix)]
 use std::os::unix::io::RawFd;
 
 use crate::address::IntoAddress;
@@ -45,7 +46,7 @@ pub struct Configuration {
     pub(crate) enabled: Option<bool>,
     pub(crate) layer: Option<Layer>,
     pub(crate) queues: Option<usize>,
-    pub(crate) raw_fd: Option<RawFd>,
+    #[cfg(unix)] pub(crate) raw_fd: Option<RawFd>,
 }
 
 impl Configuration {
@@ -119,6 +120,7 @@ impl Configuration {
     }
 
     /// Set the raw fd.
+    #[cfg(unix)]
     pub fn raw_fd(&mut self, fd: RawFd) -> &mut Self {
         self.raw_fd = Some(fd);
         self
