@@ -21,7 +21,7 @@ use futures_core::ready;
 #[cfg(not(target_os = "windows"))]
 use tokio::io::unix::AsyncFd;
 #[cfg(target_os = "windows")]
-use crate::async::win::AsyncFd;
+use crate::r#async::win::AsyncFd;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio_util::codec::Framed;
 

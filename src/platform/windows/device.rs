@@ -28,7 +28,7 @@ use libc::{c_char, c_short};
 use crate::configuration::{Configuration, Layer};
 use crate::device::Device as D;
 use crate::error::*;
-use wintun::{Session, Packet};
+use wintun::{Session, Packet, Adapter, WintunError};
 use packet;
 
 // use crate::platform::linux::sys::*;
@@ -36,9 +36,7 @@ use packet;
 
 /// A TUN device using the wintun driver.
 pub struct Device {
-    name: String,
-    queues: Vec<Queue>,
-    // ctl: Fd,
+    queue: Queue,
 }
 
 impl Device {
@@ -46,7 +44,8 @@ impl Device {
     pub fn new(config: &Configuration) -> Result<Self> {
         let wintun = unsafe { wintun::load_from_path("wintun.dll") }
             .expect("Failed to load wintun dll");
-
+        let version = wintun::get_running_driver_version(&wintun);
+        println!("Using wintun version: {:?}", version);
         // let dev = match config.name.as_ref() {
         //             Some(name) => {
         //                 let name = CString::new(name.clone())?;
@@ -61,11 +60,19 @@ impl Device {
         //             None => None,
         //         };
         //
-        let name = config.name.as_ref().unwrap();
-        let adapter = match wintun::Adapter::open(&wintun, name.as_str()) {
+
+        // let n = config.name.unwrap_or_else(|| { "wintun".to_owned()});
+        let name = "Demo";
+        let adapter = match wintun::Adapter::open(&wintun, name) {
             Ok(a) => a,
-            Err(_) => wintun::Adapter::create(&wintun, "Example", name.as_str(), None)
-                .expect("Failed to create wintun adapter!"),
+            Err(_) => match wintun::Adapter::create(&wintun, "Example", name, None) {
+                Ok(a) => a,
+                Err(e) => {
+                    println!("{:?}", e);
+                    panic!()
+                }
+            }
+            // .expect("Failed to create wintun adapter!"),
         };
         let session = Arc::new(adapter.start_session(wintun::MAX_RING_CAPACITY).unwrap());
         // let reader_session = session.clone();
@@ -144,16 +151,23 @@ impl Device {
 
         // Ok(device);
         Ok(Device {
-            name: "".to_string(),
-            // session: session,
-            queues: vec![],
+            queue: Queue { session: session },
         })
+    }
+
+    /// Return whether the device has packet information
+    pub fn has_packet_information(&mut self) -> bool {
+        true
+    }
+    /// Set non-blocking mode
+    pub fn set_nonblock(&self) -> io::Result<()> {
+        self.queue.set_nonblock()
     }
 }
 
 impl Read for Device {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        return self.queues[0].read(buf);
+        return self.queue.read(buf);
     }
 
     fn read_vectored(&mut self, bufs: &mut [io::IoSliceMut<'_>]) -> io::Result<usize> {
@@ -168,11 +182,11 @@ impl Read for Device {
 
 impl Write for Device {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        return self.queues[0].write(buf);
+        return self.queue.write(buf);
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        return self.queues[0].flush();
+        return self.queue.flush();
     }
 
     fn write_vectored(&mut self, bufs: &[io::IoSlice<'_>]) -> io::Result<usize> {
@@ -189,7 +203,8 @@ impl D for Device {
     type Queue = Queue;
 
     fn name(&self) -> &str {
-        return self.name.as_str();
+        "Demo"
+        // return self.name.as_str();
     }
 
     fn set_name(&mut self, value: &str) -> Result<()> {
@@ -241,36 +256,25 @@ impl D for Device {
     }
 
     fn queue(&mut self, index: usize) -> Option<&mut Self::Queue> {
-        return Some(&mut self.queues[index]);
+        return Some(&mut self.queue);
     }
 }
 
-// impl Drop for Device {
-//     fn drop(&mut self) {
-//         for q in self.queues {
-//             q
-//         }
-//         self.session.shutdown()
-//     }
-// }
-
 pub struct Queue {
     session: Arc<Session>,
-    // tun: Fd,
-    // pi_enabled: bool,
 }
 
-// impl Queue {
-//     // pub fn has_packet_information(&mut self) -> bool {
+impl Queue {
+    //     // pub fn has_packet_information(&mut self) -> bool {
 //     //     self.pi_enabled
 //     // }
 //     //
-//     // pub fn set_nonblock(&self) -> io::Result<()> {
-//     //     // self.tun.set_nonblock()
-//     //     Ok(())
-//     // }
-// }
-//
+    pub fn set_nonblock(&self) -> io::Result<()> {
+        // self.tun.set_nonblock()
+        Ok(())
+    }
+}
+
 impl Read for Queue {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let reader_session = self.session.clone();
@@ -279,7 +283,7 @@ impl Read for Queue {
             Ok(pkt) => {
                 let d = pkt.bytes();
                 Ok(d.len())
-            },
+            }
             Err(e) => {
                 Ok(0)
             }
