@@ -30,3 +30,6 @@ pub fn create_as_async(configuration: &Configuration) -> Result<AsyncDevice, err
     let device = create(&configuration)?;
     AsyncDevice::new(device).map_err(|err| err.into())
 }
+
+#[cfg(target_os = "windows")]
+mod win;

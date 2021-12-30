@@ -18,7 +18,10 @@ use std::io::{IoSlice, Read, Write};
 use core::pin::Pin;
 use core::task::{Context, Poll};
 use futures_core::ready;
+#[cfg(not(target_os = "windows"))]
 use tokio::io::unix::AsyncFd;
+#[cfg(target_os = "windows")]
+use crate::async::win::AsyncFd;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio_util::codec::Framed;
 
