@@ -30,6 +30,10 @@ async fn main() {
         config.packet_information(true);
     });
 
+    #[cfg(target_os = "windows")]
+        config.platform(|config| {
+    });
+
     let dev = tun::create_as_async(&config).unwrap();
 
     let mut framed = dev.into_framed();

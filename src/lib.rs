@@ -29,12 +29,24 @@ pub use crate::platform::create;
 
 #[cfg(all(
     feature = "async",
-    any(target_os = "linux", target_os = "macos", target_os = "ios")
+    any(
+        target_os = "linux",
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "android",
+        target_os = "windows",
+    )
 ))]
 pub mod r#async;
 #[cfg(all(
     feature = "async",
-    any(target_os = "linux", target_os = "macos", target_os = "ios")
+    any(
+        target_os = "linux",
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "android",
+        target_os = "windows",
+    )
 ))]
 pub use r#async::*;
 

@@ -13,12 +13,13 @@
 //  0. You just DO WHAT THE FUCK YOU WANT TO.
 
 use std::io::{self, Read, Write};
+use std::mem;
 use std::os::unix::io::{AsRawFd, IntoRawFd, RawFd};
 
 use crate::error::*;
-use libc::{self, fcntl, F_SETFL, O_NONBLOCK};
+use libc::{self, fcntl, F_GETFL, F_SETFL, O_NONBLOCK};
 
-/// POSIX file descriptor support for `io` traits and optionally for `mio`.
+/// POSIX file descriptor support for `io` traits.
 pub struct Fd(pub RawFd);
 
 impl Fd {
@@ -32,7 +33,7 @@ impl Fd {
 
     /// Enable non-blocking mode
     pub fn set_nonblock(&self) -> io::Result<()> {
-        match unsafe { fcntl(self.0, F_SETFL, O_NONBLOCK) } {
+        match unsafe { fcntl(self.0, F_SETFL, fcntl(self.0, F_GETFL) | O_NONBLOCK) } {
             0 => Ok(()),
             _ => Err(io::Error::last_os_error()),
         }
@@ -49,6 +50,23 @@ impl Read for Fd {
             }
 
             Ok(amount as usize)
+        }
+    }
+
+    fn read_vectored(&mut self, bufs: &mut [io::IoSliceMut<'_>]) -> io::Result<usize> {
+        unsafe {
+            let mut msg: libc::msghdr = mem::zeroed();
+            // msg.msg_name: NULL
+            // msg.msg_namelen: 0
+            msg.msg_iov = bufs.as_mut_ptr().cast();
+            msg.msg_iovlen = bufs.len().min(libc::c_int::MAX as usize) as _;
+
+            let n = libc::recvmsg(self.0, &mut msg, 0);
+            if n < 0 {
+                return Err(io::Error::last_os_error());
+            }
+
+            Ok(n as usize)
         }
     }
 }
@@ -68,6 +86,23 @@ impl Write for Fd {
 
     fn flush(&mut self) -> io::Result<()> {
         Ok(())
+    }
+
+    fn write_vectored(&mut self, bufs: &[io::IoSlice<'_>]) -> io::Result<usize> {
+        unsafe {
+            let mut msg: libc::msghdr = mem::zeroed();
+            // msg.msg_name = NULL
+            // msg.msg_namelen = 0
+            msg.msg_iov = bufs.as_ptr() as *mut _;
+            msg.msg_iovlen = bufs.len().min(libc::c_int::MAX as usize) as _;
+
+            let n = libc::sendmsg(self.0, &msg, 0);
+            if n < 0 {
+                return Err(io::Error::last_os_error());
+            }
+
+            Ok(n as usize)
+        }
     }
 }
 
@@ -91,40 +126,6 @@ impl Drop for Fd {
             if self.0 >= 0 {
                 libc::close(self.0);
             }
-        }
-    }
-}
-
-#[cfg(feature = "mio")]
-mod mio {
-    use mio::event::Evented;
-    use mio::unix::EventedFd;
-    use mio::{Poll, PollOpt, Ready, Token};
-    use std::io;
-
-    impl Evented for super::Fd {
-        fn register(
-            &self,
-            poll: &Poll,
-            token: Token,
-            interest: Ready,
-            opts: PollOpt,
-        ) -> io::Result<()> {
-            EventedFd(&self.0).register(poll, token, interest, opts)
-        }
-
-        fn reregister(
-            &self,
-            poll: &Poll,
-            token: Token,
-            interest: Ready,
-            opts: PollOpt,
-        ) -> io::Result<()> {
-            EventedFd(&self.0).reregister(poll, token, interest, opts)
-        }
-
-        fn deregister(&self, poll: &Poll) -> io::Result<()> {
-            EventedFd(&self.0).deregister(poll)
         }
     }
 }

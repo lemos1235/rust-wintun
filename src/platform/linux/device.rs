@@ -163,7 +163,7 @@ impl Device {
         self.queues[0].has_packet_information()
     }
 
-    #[cfg(feature = "mio")]
+    /// Set non-blocking mode
     pub fn set_nonblock(&self) -> io::Result<()> {
         self.queues[0].set_nonblock()
     }
@@ -172,6 +172,10 @@ impl Device {
 impl Read for Device {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.queues[0].read(buf)
+    }
+
+    fn read_vectored(&mut self, bufs: &mut [io::IoSliceMut<'_>]) -> io::Result<usize> {
+        self.queues[0].read_vectored(bufs)
     }
 }
 
@@ -182,6 +186,10 @@ impl Write for Device {
 
     fn flush(&mut self) -> io::Result<()> {
         self.queues[0].flush()
+    }
+
+    fn write_vectored(&mut self, bufs: &[io::IoSlice<'_>]) -> io::Result<usize> {
+        self.queues[0].write_vectored(bufs)
     }
 }
 
@@ -376,8 +384,10 @@ impl AsRawFd for Device {
 }
 
 impl IntoRawFd for Device {
-    fn into_raw_fd(self) -> RawFd {
-        self.queues[0].as_raw_fd()
+    fn into_raw_fd(mut self) -> RawFd {
+        // It is Ok to swap the first queue with the last one, because the self will be dropped afterwards
+        let queue = self.queues.swap_remove(0);
+        queue.into_raw_fd()
     }
 }
 
@@ -391,7 +401,6 @@ impl Queue {
         self.pi_enabled
     }
 
-    #[cfg(feature = "mio")]
     pub fn set_nonblock(&self) -> io::Result<()> {
         self.tun.set_nonblock()
     }
@@ -400,6 +409,10 @@ impl Queue {
 impl Read for Queue {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.tun.read(buf)
+    }
+
+    fn read_vectored(&mut self, bufs: &mut [io::IoSliceMut<'_>]) -> io::Result<usize> {
+        self.tun.read_vectored(bufs)
     }
 }
 
@@ -410,6 +423,10 @@ impl Write for Queue {
 
     fn flush(&mut self) -> io::Result<()> {
         self.tun.flush()
+    }
+
+    fn write_vectored(&mut self, bufs: &[io::IoSlice<'_>]) -> io::Result<usize> {
+        self.tun.write_vectored(bufs)
     }
 }
 
@@ -430,65 +447,6 @@ impl Into<c_short> for Layer {
         match self {
             Layer::L2 => IFF_TAP,
             Layer::L3 => IFF_TUN,
-        }
-    }
-}
-
-#[cfg(feature = "mio")]
-mod mio {
-    use mio::event::Evented;
-    use mio::{Poll, PollOpt, Ready, Token};
-    use std::io;
-
-    impl Evented for super::Device {
-        fn register(
-            &self,
-            poll: &Poll,
-            token: Token,
-            interest: Ready,
-            opts: PollOpt,
-        ) -> io::Result<()> {
-            self.queues[0].register(poll, token, interest, opts)
-        }
-
-        fn reregister(
-            &self,
-            poll: &Poll,
-            token: Token,
-            interest: Ready,
-            opts: PollOpt,
-        ) -> io::Result<()> {
-            self.queues[0].reregister(poll, token, interest, opts)
-        }
-
-        fn deregister(&self, poll: &Poll) -> io::Result<()> {
-            self.queues[0].deregister(poll)
-        }
-    }
-
-    impl Evented for super::Queue {
-        fn register(
-            &self,
-            poll: &Poll,
-            token: Token,
-            interest: Ready,
-            opts: PollOpt,
-        ) -> io::Result<()> {
-            self.tun.register(poll, token, interest, opts)
-        }
-
-        fn reregister(
-            &self,
-            poll: &Poll,
-            token: Token,
-            interest: Ready,
-            opts: PollOpt,
-        ) -> io::Result<()> {
-            self.tun.reregister(poll, token, interest, opts)
-        }
-
-        fn deregister(&self, poll: &Poll) -> io::Result<()> {
-            self.tun.deregister(poll)
         }
     }
 }

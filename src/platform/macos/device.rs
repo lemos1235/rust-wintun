@@ -176,7 +176,7 @@ impl Device {
         self.queue.has_packet_information()
     }
 
-    #[cfg(feature = "mio")]
+    /// Set non-blocking mode
     pub fn set_nonblock(&self) -> io::Result<()> {
         self.queue.set_nonblock()
     }
@@ -185,6 +185,10 @@ impl Device {
 impl Read for Device {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.queue.tun.read(buf)
+    }
+
+    fn read_vectored(&mut self, bufs: &mut [io::IoSliceMut<'_>]) -> io::Result<usize> {
+        self.queue.tun.read_vectored(bufs)
     }
 }
 
@@ -195,6 +199,10 @@ impl Write for Device {
 
     fn flush(&mut self) -> io::Result<()> {
         self.queue.tun.flush()
+    }
+
+    fn write_vectored(&mut self, bufs: &[io::IoSlice<'_>]) -> io::Result<usize> {
+        self.queue.tun.write_vectored(bufs)
     }
 }
 
@@ -368,13 +376,13 @@ impl D for Device {
 
 impl AsRawFd for Device {
     fn as_raw_fd(&self) -> RawFd {
-        self.queue.tun.as_raw_fd()
+        self.queue.as_raw_fd()
     }
 }
 
 impl IntoRawFd for Device {
     fn into_raw_fd(self) -> RawFd {
-        self.queue.tun.into_raw_fd()
+        self.queue.into_raw_fd()
     }
 }
 
@@ -388,15 +396,30 @@ impl Queue {
         true
     }
 
-    #[cfg(feature = "mio")]
     pub fn set_nonblock(&self) -> io::Result<()> {
         self.tun.set_nonblock()
+    }
+}
+
+impl AsRawFd for Queue {
+    fn as_raw_fd(&self) -> RawFd {
+        self.tun.as_raw_fd()
+    }
+}
+
+impl IntoRawFd for Queue {
+    fn into_raw_fd(self) -> RawFd {
+        self.tun.into_raw_fd()
     }
 }
 
 impl Read for Queue {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.tun.read(buf)
+    }
+
+    fn read_vectored(&mut self, bufs: &mut [io::IoSliceMut<'_>]) -> io::Result<usize> {
+        self.tun.read_vectored(bufs)
     }
 }
 
@@ -408,63 +431,8 @@ impl Write for Queue {
     fn flush(&mut self) -> io::Result<()> {
         self.tun.flush()
     }
-}
 
-#[cfg(feature = "mio")]
-mod mio {
-    use mio::event::Evented;
-    use mio::{Poll, PollOpt, Ready, Token};
-    use std::io;
-
-    impl Evented for super::Device {
-        fn register(
-            &self,
-            poll: &Poll,
-            token: Token,
-            interest: Ready,
-            opts: PollOpt,
-        ) -> io::Result<()> {
-            self.queue.register(poll, token, interest, opts)
-        }
-
-        fn reregister(
-            &self,
-            poll: &Poll,
-            token: Token,
-            interest: Ready,
-            opts: PollOpt,
-        ) -> io::Result<()> {
-            self.queue.reregister(poll, token, interest, opts)
-        }
-
-        fn deregister(&self, poll: &Poll) -> io::Result<()> {
-            self.queue.deregister(poll)
-        }
-    }
-
-    impl Evented for super::Queue {
-        fn register(
-            &self,
-            poll: &Poll,
-            token: Token,
-            interest: Ready,
-            opts: PollOpt,
-        ) -> io::Result<()> {
-            self.tun.register(poll, token, interest, opts)
-        }
-
-        fn reregister(
-            &self,
-            poll: &Poll,
-            token: Token,
-            interest: Ready,
-            opts: PollOpt,
-        ) -> io::Result<()> {
-            self.tun.reregister(poll, token, interest, opts)
-        }
-
-        fn deregister(&self, poll: &Poll) -> io::Result<()> {
-            self.tun.deregister(poll)
-        }
+    fn write_vectored(&mut self, bufs: &[io::IoSlice<'_>]) -> io::Result<usize> {
+        self.tun.write_vectored(bufs)
     }
 }
