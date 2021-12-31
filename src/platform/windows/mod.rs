@@ -17,7 +17,7 @@
 pub mod sys;
 
 mod device;
-pub use self::device::{Device, Queue};
+pub use self::device::{Device, Queue, AsWintun};
 
 use crate::configuration::Configuration as C;
 use crate::error::*;

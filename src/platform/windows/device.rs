@@ -28,11 +28,16 @@ use libc::{c_char, c_short};
 use crate::configuration::{Configuration, Layer};
 use crate::device::Device as D;
 use crate::error::*;
-use wintun::{Session, Packet, Adapter, WintunError};
+use wintun::{Session, Packet, Adapter, WintunError, Wintun};
 use packet;
 
 // use crate::platform::linux::sys::*;
 // use crate::platform::posix::{Fd, SockAddr};
+
+pub trait AsWintun {
+    fn as_wintun(&self) -> Wintun;
+}
+
 
 /// A TUN device using the wintun driver.
 pub struct Device {
@@ -248,7 +253,7 @@ impl D for Device {
     }
 
     fn mtu(&self) -> Result<i32> {
-        Err(Error::NotImplemented)
+        Ok(1504)
     }
 
     fn set_mtu(&mut self, value: i32) -> Result<()> {
@@ -260,15 +265,21 @@ impl D for Device {
     }
 }
 
+impl AsWintun for Device {
+    fn as_wintun(&self) -> Wintun {
+        self.queue
+    }
+}
+
 pub struct Queue {
     session: Arc<Session>,
 }
 
 impl Queue {
-    //     // pub fn has_packet_information(&mut self) -> bool {
-//     //     self.pi_enabled
-//     // }
-//     //
+    pub fn has_packet_information(&mut self) -> bool {
+        true
+    }
+
     pub fn set_nonblock(&self) -> io::Result<()> {
         // self.tun.set_nonblock()
         Ok(())
@@ -329,6 +340,13 @@ impl Write for Queue {
 impl Drop for Queue {
     fn drop(&mut self) {
         self.session.shutdown();
+    }
+}
+
+impl AsWintun for Queue {
+    fn as_wintun(&self) -> Wintun {
+       let s = self.session.clone();
+        s.
     }
 }
 
