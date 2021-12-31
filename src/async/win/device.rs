@@ -31,7 +31,7 @@ use crate::r#async::codec::*;
 
 /// An async TUN device wrapper around a TUN device.
 pub struct AsyncDevice {
-    // inner: AsyncFd<Device>,
+    inner: AsyncFd<Device>,
 }
 
 impl AsyncDevice {
