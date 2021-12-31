@@ -1,10 +1,10 @@
 use std::io;
 use crate::Device;
 use std::task::{Poll, Context};
-use tokio::ready;
-use crate::platform::windows::AsWintun;
+// use tokio::ready;
+// use crate::platform::windows::AsWintun;
 
-pub struct AsyncFd<T: AsWintun> {
+pub struct AsyncFd<T> {
     inner: Option<T>,
 }
 

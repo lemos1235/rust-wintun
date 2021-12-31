@@ -33,10 +33,10 @@ use packet;
 
 // use crate::platform::linux::sys::*;
 // use crate::platform::posix::{Fd, SockAddr};
-
-pub trait AsWintun {
-    fn as_wintun(&self) -> Wintun;
-}
+//
+// pub trait AsWintun {
+//     fn as_wintun(&self) -> Wintun;
+// }
 
 
 /// A TUN device using the wintun driver.
@@ -265,12 +265,6 @@ impl D for Device {
     }
 }
 
-impl AsWintun for Device {
-    fn as_wintun(&self) -> Wintun {
-        self.queue
-    }
-}
-
 pub struct Queue {
     session: Arc<Session>,
 }
@@ -342,20 +336,3 @@ impl Drop for Queue {
         self.session.shutdown();
     }
 }
-
-impl AsWintun for Queue {
-    fn as_wintun(&self) -> Wintun {
-       let s = self.session.clone();
-        s.
-    }
-}
-
-// impl Into<c_short> for Layer {
-//     fn into(self) -> c_short {
-//         // match self {
-//         //     Layer::L2 => IFF_TAP,
-//         //     Layer::L3 => IFF_TUN,
-//         // }
-//         0
-//     }
-// }

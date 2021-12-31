@@ -47,6 +47,7 @@ pub struct Configuration {
     pub(crate) layer: Option<Layer>,
     pub(crate) queues: Option<usize>,
     #[cfg(unix)] pub(crate) raw_fd: Option<RawFd>,
+    #[cfg(not(unix))] pub(crate) raw_fd: Option<i32>,
 }
 
 impl Configuration {
@@ -122,6 +123,11 @@ impl Configuration {
     /// Set the raw fd.
     #[cfg(unix)]
     pub fn raw_fd(&mut self, fd: RawFd) -> &mut Self {
+        self.raw_fd = Some(fd);
+        self
+    }
+    #[cfg(not(unix))]
+    pub fn raw_fd(&mut self, fd: i32) -> &mut Self {
         self.raw_fd = Some(fd);
         self
     }
