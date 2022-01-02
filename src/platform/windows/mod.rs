@@ -14,10 +14,9 @@
 
 //! Windows specific functionality.
 
-pub mod sys;
-
 mod device;
-pub use self::device::{Device, Queue};
+
+pub use device::{Device, Queue};
 
 use crate::configuration::Configuration as C;
 use crate::error::*;
@@ -30,4 +29,12 @@ pub struct Configuration {}
 /// Create a TUN device with the given name.
 pub fn create(configuration: &C) -> Result<Device> {
     Device::new(&configuration)
+}
+
+pub(crate) trait TryRead {
+    fn try_read(&mut self, buf: &mut [u8]) -> std::io::Result<usize>;
+}
+
+pub(crate) trait TryWrite {
+    fn try_write(&mut self, buf: &[u8]) -> std::io::Result<usize>;
 }

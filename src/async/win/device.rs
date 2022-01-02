@@ -13,17 +13,17 @@
 //  0. You just DO WHAT THE FUCK YOU WANT TO.
 
 use std::io;
-use std::io::{IoSlice, Read, Write};
+use std::io::{ErrorKind, IoSlice, Read, Write};
 
 use core::pin::Pin;
 use core::task::{Context, Poll};
+use std::sync::Arc;
 use futures_core::ready;
-// #[cfg(not(target_os = "windows"))]
-// use tokio::io::unix::AsyncFd;
-// #[cfg(target_os = "windows")]
-// use crate::r#async::win::AsyncFd;
+
+use crate::r#async::win::AsyncFd;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio_util::codec::Framed;
+use wintun::Session;
 
 use crate::device::Device as D;
 use crate::platform::{Device, Queue};
@@ -38,28 +38,29 @@ impl AsyncDevice {
     /// Create a new `AsyncDevice` wrapping around a `Device`.
     pub fn new(device: Device) -> io::Result<AsyncDevice> {
         device.set_nonblock()?;
+        let fd = AsyncFd::new(device);
+        if fd.is_err() {
+            return Err(io::Error::from(ErrorKind::Other))
+        };
         Ok(AsyncDevice {
-            // inner: AsyncFd::new(device)?,
+            inner: fd.unwrap(),
         })
     }
     /// Returns a shared reference to the underlying Device object
     pub fn get_ref(&self) -> &Device {
-        todo!()
-        // self.inner.get_ref()
+        self.inner.get_ref()
     }
 
     /// Returns a mutable reference to the underlying Device object
     pub fn get_mut(&mut self) -> &mut Device {
-        todo!()
-        // self.inner.get_mut()
+         self.inner.get_mut()
     }
 
     /// Consumes this AsyncDevice and return a Framed object (unified Stream and Sink interface)
     pub fn into_framed(mut self) -> Framed<Self, TunPacketCodec> {
-        todo!()
-        // let pi = self.get_mut().has_packet_information();
-        // let codec = TunPacketCodec::new(pi, self.inner.get_ref().mtu().unwrap_or(1504));
-        // Framed::new(self, codec)
+        let pi = self.get_mut().has_packet_information();
+        let codec = TunPacketCodec::new(pi, self.get_ref().mtu().unwrap_or(1504));
+        Framed::new(self, codec)
     }
 }
 
@@ -69,13 +70,25 @@ impl AsyncRead for AsyncDevice {
         cx: &mut Context<'_>,
         buf: &mut ReadBuf,
     ) -> Poll<io::Result<()>> {
-        todo!()
+        let rbuf = buf.initialize_unfilled();
+        match self.inner.try_read(rbuf) {
+            Ok(0) => return Poll::Pending,
+            Ok(n) => {
+                buf.advance(n);
+                return Poll::Ready(Ok(()));
+            },
+            Err(e) => Poll::Ready(Err(e))
+        }
+
         // loop {
-        //     let mut guard = ready!(self.inner.poll_read_ready_mut(cx))?;
         //     let rbuf = buf.initialize_unfilled();
-        //     match guard.try_io(|inner| inner.get_mut().read(rbuf)) {
-        //         Ok(res) => return Poll::Ready(res.map(|n| buf.advance(n))),
-        //         Err(_wb) => continue,
+        //     match self.inner.read(rbuf) {
+        //         Ok(0) => return Poll::Pending,
+        //         Ok(n) => {
+        //             buf.advance(n);
+        //             return Poll::Ready(Ok(()));
+        //         },
+        //         Err(_) => continue,
         //     }
         // }
     }
@@ -87,74 +100,54 @@ impl AsyncWrite for AsyncDevice {
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<io::Result<usize>> {
-        todo!()
+        match self.inner.try_write(buf) {
+            Ok(n) => return Poll::Ready(Ok(n)),
+            Err(e) => return Poll::Ready(Err(e))
+        }
         // loop {
-        //     let mut guard = ready!(self.inner.poll_write_ready_mut(cx))?;
-        //     match guard.try_io(|inner| inner.get_mut().write(buf)) {
-        //         Ok(res) => return Poll::Ready(res),
-        //         Err(_wb) => continue,
-        //     }
+        //
+        // //     let mut guard = ready!(self.inner.poll_write_ready_mut(cx))?;
+        // //     match guard.try_io(|inner| inner.get_mut().write(buf)) {
+        // //         Ok(res) => return Poll::Ready(res),
+        // //         Err(_wb) => continue,
+        // //     }
         // }
     }
 
     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        todo!()
-        // loop {
-        //     let mut guard = ready!(self.inner.poll_write_ready_mut(cx))?;
-        //     match guard.try_io(|inner| inner.get_mut().flush()) {
-        //         Ok(res) => return Poll::Ready(res),
-        //         Err(_wb) => continue,
-        //     }
-        // }
+        Poll::Ready(Ok(()))
     }
 
     fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         Poll::Ready(Ok(()))
     }
-
-    fn poll_write_vectored(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        bufs: &[IoSlice<'_>],
-    ) -> Poll<Result<usize, io::Error>> {
-        todo!()
-        // loop {
-        //     let mut guard = ready!(self.inner.poll_write_ready_mut(cx))?;
-        //     match guard.try_io(|inner| inner.get_mut().write_vectored(bufs)) {
-        //         Ok(res) => return Poll::Ready(res),
-        //         Err(_wb) => continue,
-        //     }
-        // }
-    }
-
-    fn is_write_vectored(&self) -> bool {
-        true
-    }
 }
 
 /// An async TUN device queue wrapper around a TUN device queue.
 pub struct AsyncQueue {
-    // inner: AsyncFd<Queue>,
+    inner: AsyncFd<Queue>,
 }
 
 impl AsyncQueue {
     /// Create a new `AsyncQueue` wrapping around a `Queue`.
     pub fn new(queue: Queue) -> io::Result<AsyncQueue> {
         queue.set_nonblock()?;
+        let fd = AsyncFd::new(queue);
+        if fd.is_err() {
+            return Err(io::Error::from(io::ErrorKind::Other))
+        }
         Ok(AsyncQueue {
-            // inner: AsyncFd::new(queue)?,
+            inner: fd.unwrap(),
         })
     }
     /// Returns a shared reference to the underlying Queue object
     pub fn get_ref(&self) -> &Queue {
-        todo!()
-        // self.inner.get_ref()
+        self.inner.get_ref()
     }
 
     /// Returns a mutable reference to the underlying Queue object
     pub fn get_mut(&mut self) -> &mut Queue {
-        todo!()
-        // self.inner.get_mut()
+         self.inner.get_mut()
     }
 
     /// Consumes this AsyncQueue and return a Framed object (unified Stream and Sink interface)
@@ -171,13 +164,26 @@ impl AsyncRead for AsyncQueue {
         cx: &mut Context<'_>,
         buf: &mut ReadBuf,
     ) -> Poll<io::Result<()>> {
-        todo!()
+        let rbuf = buf.initialize_unfilled();
+        match self.inner.try_read(rbuf) {
+            Ok(0) => return Poll::Pending,
+            Ok(n) => {
+                buf.advance(n);
+                return Poll::Ready(Ok(()));
+            },
+            Err(e) => Poll::Ready(Err(e))
+        }
+
         // loop {
-        //     let mut guard = ready!(self.inner.poll_read_ready_mut(cx))?;
         //     let rbuf = buf.initialize_unfilled();
-        //     match guard.try_io(|inner| inner.get_mut().read(rbuf)) {
-        //         Ok(res) => return Poll::Ready(res.map(|n| buf.advance(n))),
-        //         Err(_wb) => continue,
+        //
+        //     match self.inner.try_read(rbuf) {
+        //         Ok(0) => return Poll::Pending,
+        //         Ok(n) => {
+        //             buf.advance(n);
+        //             return Poll::Ready(Ok(()));
+        //         },
+        //         Err(_) => continue,
         //     }
         // }
     }
@@ -189,25 +195,22 @@ impl AsyncWrite for AsyncQueue {
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<io::Result<usize>> {
-        todo!()
-        // loop {
-        //     let mut guard = ready!(self.inner.poll_write_ready_mut(cx))?;
-        //     match guard.try_io(|inner| inner.get_mut().write(buf)) {
-        //         Ok(res) => return Poll::Ready(res),
-        //         Err(_wb) => continue,
-        //     }
-        // }
+        match self.inner.try_write(buf) {
+            Ok(n) => return Poll::Ready(Ok(n)),
+            Err(e) => return Poll::Ready(Err(e))
+        }
+        // self.inner.write(buf)
+        // // let writer_session = self.inner.read2()
+        // let mut packet = writer_session.allocate_send_packet(buf.len() as u16).unwrap();
+        // let b = packet::buffer::Slice::new(packet.bytes_mut());
+        // // packet::ip::v4::Builder::with(b)
+        //
+        // writer_session.send_packet(packet);
+        // Ok(buf.len())
     }
 
     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        todo!()
-        // loop {
-        //     let mut guard = ready!(self.inner.poll_write_ready_mut(cx))?;
-        //     match guard.try_io(|inner| inner.get_mut().flush()) {
-        //         Ok(res) => return Poll::Ready(res),
-        //         Err(_wb) => continue,
-        //     }
-        // }
+        Poll::Ready(Ok(()))
     }
 
     fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {

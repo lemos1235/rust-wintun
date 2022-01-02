@@ -24,7 +24,6 @@ mod device;
 #[cfg(not(target_os = "windows"))]
 pub use self::device::{AsyncDevice, AsyncQueue};
 
-
 #[cfg(target_os = "windows")]
 mod win;
 #[cfg(target_os = "windows")]
