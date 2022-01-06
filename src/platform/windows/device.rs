@@ -19,18 +19,14 @@ use std::net::Ipv4Addr;
 use std::ptr;
 use std::sync::Arc;
 use std::vec::Vec;
-// use futures::future::ok;
-
-use libc;
-use libc::{c_char, c_short};
-// use libc::{AF_INET, O_RDWR, SOCK_DGRAM};
 
 use crate::configuration::{Configuration, Layer};
 use crate::device::Device as D;
 use crate::error::*;
-use wintun::{Session, Packet, Adapter, WintunError, Wintun};
+use wintun::{Session, Packet, WintunError, Wintun};
 use packet;
 use crate::platform::windows::{TryRead, TryWrite};
+use ipconfig::{get_adapters, Adapter as IpAdapter};
 
 /// A TUN device using the wintun driver.
 pub struct Device {
@@ -51,10 +47,13 @@ impl Device {
         let name = n.clone();
         let adapter = match wintun::Adapter::open(&wintun, name.as_str()) {
             Ok(a) => a,
-            Err(_) => wintun::Adapter::create(&wintun, "Example", name.as_str(), None)
+            Err(_) => wintun::Adapter::create(&wintun, "Wintun", name.as_str(), None)
                 .expect("Failed to create wintun adapter!"),
         };
         let session = Arc::new(adapter.start_session(wintun::MAX_RING_CAPACITY).unwrap());
+
+        let adapters = ipconfig::get_adapters()?;
+        adapters.binary_search_by(|probe| probe.cmp(&seek));
         Ok(Device {
             name: name.clone(),
             queue: Queue { session: session },
@@ -63,7 +62,7 @@ impl Device {
 
     /// Return whether the device has packet information
     pub fn has_packet_information(&mut self) -> bool {
-        true
+        false
     }
     /// Set non-blocking mode
     pub fn set_nonblock(&self) -> io::Result<()> {
@@ -177,11 +176,10 @@ pub struct Queue {
 
 impl Queue {
     pub fn has_packet_information(&mut self) -> bool {
-        true
+        false
     }
 
     pub fn set_nonblock(&self) -> io::Result<()> {
-        // self.tun.set_nonblock()
         Ok(())
     }
 }

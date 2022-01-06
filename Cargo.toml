@@ -29,6 +29,7 @@ ioctl = { version = "0.6", package = "ioctl-sys" }
 [target.'cfg(target_os = "windows")'.dependencies]
 wintun = "0.2.1"
 packet = "0.1"
+ipconfig = "0.3.0"
 # MARKER END
 
 [dev-dependencies]

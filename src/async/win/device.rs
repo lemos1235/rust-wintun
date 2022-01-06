@@ -38,12 +38,8 @@ impl AsyncDevice {
     /// Create a new `AsyncDevice` wrapping around a `Device`.
     pub fn new(device: Device) -> io::Result<AsyncDevice> {
         device.set_nonblock()?;
-        let fd = AsyncFd::new(device);
-        if fd.is_err() {
-            return Err(io::Error::from(ErrorKind::Other))
-        };
         Ok(AsyncDevice {
-            inner: fd.unwrap(),
+            inner:  AsyncFd::new(device)?,
         })
     }
     /// Returns a shared reference to the underlying Device object
@@ -132,12 +128,8 @@ impl AsyncQueue {
     /// Create a new `AsyncQueue` wrapping around a `Queue`.
     pub fn new(queue: Queue) -> io::Result<AsyncQueue> {
         queue.set_nonblock()?;
-        let fd = AsyncFd::new(queue);
-        if fd.is_err() {
-            return Err(io::Error::from(io::ErrorKind::Other))
-        }
         Ok(AsyncQueue {
-            inner: fd.unwrap(),
+            inner: AsyncFd::new(queue)?,
         })
     }
     /// Returns a shared reference to the underlying Queue object
