@@ -41,8 +41,6 @@ pub struct Device {
 impl Device {
     /// Create a new `Device` for the given `Configuration`.
     pub fn new(config: &Configuration) -> Result<Self> {
-        // let wintun = unsafe { wintun::load_from_path("wintun.dll") }
-        //     .expect("Failed to load wintun dll");
         let wintun = unsafe { wintun::load() }
             .expect("Failed to load wintun dll");
         let version = wintun::get_running_driver_version(&wintun);

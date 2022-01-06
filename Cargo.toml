@@ -52,3 +52,7 @@ required-features = [ "async", "tokio/rt-multi-thread" ]
 
 [[example]]
 name = "wintun"
+[[example]]
+
+name = "tun2udp"
+required-features = [ "async", "tokio/rt-multi-thread", "tokio/io-util" ]
