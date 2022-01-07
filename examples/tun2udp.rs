@@ -15,8 +15,9 @@ async fn main() -> std::io::Result<()> {
     let mut config = tun::Configuration::default();
 
     config
-        .address((10, 0, 0, 1))
+        .address((10, 0, 0, 2))
         .netmask((255, 255, 255, 0))
+        .destination((10, 0, 0, 1))
         .up();
 
     #[cfg(target_os = "linux")]
@@ -25,7 +26,7 @@ async fn main() -> std::io::Result<()> {
     });
 
     let mut dev = tun::create_as_async(&config).unwrap();
-    let sock = UdpSocket::bind("0.0.0.0:8080").await?;
+    let sock = UdpSocket::bind("0.0.0.0:8082").await?;
     let remote_addr = "127.0.0.1:8081".parse::<SocketAddr>().unwrap();
     sock.connect(remote_addr).await?;
     let mut outlet = UdpOutlet::new(sock);
