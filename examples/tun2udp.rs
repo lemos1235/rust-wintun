@@ -15,8 +15,9 @@ async fn main() -> std::io::Result<()> {
     let mut config = tun::Configuration::default();
 
     config
-        .address((10, 0, 0, 1))
+        .address((10, 0, 0, 2))
         .netmask((255, 255, 255, 0))
+        .destination((10, 0, 0, 1))
         .up();
 
     #[cfg(target_os = "linux")]
@@ -46,16 +47,13 @@ impl UdpOutlet {
         }
     }
 }
+
 impl AsyncRead for UdpOutlet {
     fn poll_read(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut ReadBuf<'_>) -> Poll<io::Result<()>> {
         match self.inner.poll_recv_ready(cx) {
-            Poll::Pending => return Poll::Pending,
-            Poll::Ready(_) => {
-                match self.inner.poll_recv(cx, buf) {
-                    Poll::Pending => Poll::Pending,
-                    Poll::Ready(res) => Poll::Ready(res)
-                }
-            }
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
+            Poll::Ready(Ok(())) => self.inner.poll_recv(cx, buf),
         }
     }
 }
@@ -63,13 +61,9 @@ impl AsyncRead for UdpOutlet {
 impl AsyncWrite for UdpOutlet {
     fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize, Error>> {
         match self.inner.poll_send_ready(cx) {
-            Poll::Pending => return Poll::Pending,
-            Poll::Ready(_) => {
-                match self.inner.poll_send(cx, buf) {
-                    Poll::Pending => Poll::Pending,
-                    Poll::Ready(res) => Poll::Ready(res)
-                }
-            }
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
+            Poll::Ready(Ok(())) => self.inner.poll_send(cx, buf),
         }
     }
 

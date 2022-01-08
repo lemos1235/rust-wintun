@@ -27,6 +27,8 @@ use wintun::{Session, Packet, WintunError, Wintun};
 use packet;
 use crate::platform::windows::{TryRead, TryWrite};
 use ipconfig::{get_adapters, Adapter as IpAdapter};
+use std::process::Command;
+// use std::error::Error;
 
 /// A TUN device using the wintun driver.
 pub struct Device {
@@ -47,17 +49,56 @@ impl Device {
         let name = n.clone();
         let adapter = match wintun::Adapter::open(&wintun, name.as_str()) {
             Ok(a) => a,
-            Err(_) => wintun::Adapter::create(&wintun, "Wintun", name.as_str(), None)
+            Err(_) => wintun::Adapter::create(&wintun, name.as_str(), name.as_str(), None)
                 .expect("Failed to create wintun adapter!"),
         };
         let session = Arc::new(adapter.start_session(wintun::MAX_RING_CAPACITY).unwrap());
 
-        let adapters = ipconfig::get_adapters()?;
-        adapters.binary_search_by(|probe| probe.cmp(&seek));
-        Ok(Device {
+        let address =  config.address.clone().unwrap_or("10.0.0.2".parse().unwrap());
+        let destination =  config.destination.clone().unwrap_or("10.0.0.1".parse().unwrap());
+        let netmask =  config.netmask.clone().unwrap_or("255.255.255.0".parse().unwrap());
+
+        let out = Command::new("netsh")
+            .arg("interface").arg("ip").arg("set").arg("address")
+            .arg(format!("name={}", n))
+            .arg(format!("source={}", "static"))
+            .arg(format!("address={}",address))
+            .arg(format!("mask={}", netmask))
+            .arg(format!("gateway={}", destination))
+            .output()
+            .expect("failed to execute command");
+        println!("status: {}", out.status);
+        io::stdout().write_all(&out.stdout).unwrap();
+        io::stderr().write_all(&out.stderr).unwrap();
+        assert!(out.status.success());
+        // let out = String::from_utf8_lossy(&out.stdout).to_string();
+        // let cols: Vec<&str> = out
+        //     .lines()
+        //     .filter(|l| l.contains("via"))
+        //     .next()
+        //     .unwrap()
+        //     .split_whitespace()
+        //     .map(str::trim)
+        //     .collect();
+        // assert!(cols.len() >= 3);
+        // let res = cols[2].to_string();
+
+        // let adapters = ipconfig::get_adapters().map_err(|e| Error::InvalidConfig )?;
+        // println!("{}", adapters.len());
+        // let iff= adapters.iter().filter(| &a| {
+        //    return  a.friendly_name().eq( name.clone().as_str())
+        // }).last().unwrap();
+        // config.address
+        // iff.ip_addresses()
+        // println!("{:?}", iff.friendly_name());
+        // adapters.binary_search_by(|probe| probe.cmp(&seek));
+
+        let mut device = Device {
             name: name.clone(),
             queue: Queue { session: session },
-        })
+        };
+        device.configure(&config)?;
+        Ok(device)
     }
 
     /// Return whether the device has packet information
