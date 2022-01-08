@@ -20,6 +20,7 @@ fn main() {
     config
         .address((10, 0, 0, 1))
         .netmask((255, 255, 255, 0))
+        // .destination((10, 0, 0, 1))
         .up();
 
     #[cfg(target_os = "linux")]

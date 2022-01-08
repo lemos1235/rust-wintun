@@ -54,20 +54,20 @@ impl Device {
         };
         let session = Arc::new(adapter.start_session(wintun::MAX_RING_CAPACITY).unwrap());
 
-        let address =  config.address.clone().unwrap_or("10.0.0.2".parse().unwrap());
-        let destination =  config.destination.clone().unwrap_or("10.0.0.1".parse().unwrap());
-        let netmask =  config.netmask.clone().unwrap_or("255.255.255.0".parse().unwrap());
+        let address = config.address.clone().unwrap_or("10.0.0.2".parse().unwrap());
+        let destination = config.destination.clone().unwrap_or("10.0.0.1".parse().unwrap());
+        let netmask = config.netmask.clone().unwrap_or("255.255.255.0".parse().unwrap());
 
         let out = Command::new("netsh")
             .arg("interface").arg("ip").arg("set").arg("address")
             .arg(format!("name={}", n))
             .arg(format!("source={}", "static"))
-            .arg(format!("address={}",address))
+            .arg(format!("address={}", address))
             .arg(format!("mask={}", netmask))
             .arg(format!("gateway={}", destination))
             .output()
             .expect("failed to execute command");
-        println!("status: {}", out.status);
+        // println!("status: {}", out.status);
         io::stdout().write_all(&out.stdout).unwrap();
         io::stderr().write_all(&out.stderr).unwrap();
         assert!(out.status.success());
@@ -226,23 +226,17 @@ impl Queue {
 }
 
 impl TryRead for Queue {
-    fn try_read(&mut self,  buf: &mut [u8]) -> io::Result<usize> {
+    fn try_read(&mut self, mut buf: &mut [u8]) -> io::Result<usize> {
         let reader_session = self.session.clone();
-        // let mut buffer = [0; 10];
-         let    buffer2 = & b"aaaaaa".clone()[..];
-        // let mut buffer3 =  &buffer2[..];
-        // let  ref mut  str_slice =  ["one", "two", "three"];
-
-        let mut b = buf;
         match reader_session.try_receive() {
+            Err(_) => Err(io::Error::from(io::ErrorKind::Other)),
             Ok(op) => match op {
                 None => Ok(0),
-                Some(mut packet) =>{
-                    io::copy(&mut packet.bytes(),    &mut b);
+                Some(mut packet) => {
+                    io::copy(&mut packet.bytes(), &mut buf);
                     Ok(packet.bytes().len())
                 }
             }
-            Err(_) => Err(io::Error::from(io::ErrorKind::Other))
         }
     }
 }
@@ -254,53 +248,36 @@ impl TryWrite for Queue {
 }
 
 impl Read for Queue {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+    fn read(&mut self, mut buf: &mut [u8]) -> io::Result<usize> {
         let reader_session = self.session.clone();
-        let pkt = reader_session.receive_blocking();
-        return match pkt {
-            Ok(pkt) => {
-                let d = pkt.bytes();
-                Ok(d.len())
+        match reader_session.receive_blocking() {
+            Ok(mut pkt) => {
+                match io::copy(&mut pkt.bytes(), &mut buf) {
+                    Ok(n) => Ok(n as usize),
+                    Err(e) => Err(e)
+                }
             }
-            Err(e) => {
-                Ok(0)
-            }
-        };
-    }
-
-    fn read_vectored(&mut self, bufs: &mut [io::IoSliceMut<'_>]) -> io::Result<usize> {
-        let mut s: usize = 0;
-        for buf in bufs {
-            let a = self.read(buf).unwrap();
-            s += a;
+            Err(_) => Err(io::Error::from(io::ErrorKind::ConnectionAborted))
         }
-        Ok(s)
     }
 }
 
 impl Write for Queue {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+    fn write(&mut self, mut buf: &[u8]) -> io::Result<usize> {
         let size = buf.len();
         let writer_session = self.session.clone();
-        let mut packet = writer_session.allocate_send_packet(size as u16).unwrap();
-        let mut b = buf;
-        io::copy(&mut b, &mut packet.bytes_mut());
-        // packet::buffer::Slice::new(packet.bytes_mut());
-        writer_session.send_packet(packet);
-        Ok(size)
+        match writer_session.allocate_send_packet(size as u16) {
+            Err(_) => Err(io::Error::from(io::ErrorKind::OutOfMemory)),
+            Ok(mut packet) => {
+                io::copy(&mut buf, &mut packet.bytes_mut());
+                writer_session.send_packet(packet);
+                Ok(size)
+            }
+        }
     }
 
     fn flush(&mut self) -> io::Result<()> {
         Ok(())
-    }
-
-    fn write_vectored(&mut self, bufs: &[io::IoSlice<'_>]) -> io::Result<usize> {
-        let mut sent: usize = 0;
-        for buf in bufs {
-            self.write(buf);
-            sent += buf.len();
-        }
-        Ok(sent)
     }
 }
 

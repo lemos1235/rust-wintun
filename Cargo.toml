@@ -60,6 +60,9 @@ required-features = [ "async", "tokio/rt-multi-thread", "tokio/io-util" ]
 
 [[example]]
 name = "tun2tcp"
+
+[[example]]
+name = "tun2tcp-async"
 required-features = [ "async", "tokio/rt-multi-thread", "tokio/io-util" ]
 
 [[example]]

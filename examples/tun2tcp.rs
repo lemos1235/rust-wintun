@@ -1,17 +1,20 @@
-use futures::StreamExt;
-use packet::ip::Packet;
-use tokio::net::{TcpSocket, UdpSocket};
-use std::net::SocketAddr;
-use std::sync::Arc;
-use std::io;
-use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt, ReadBuf};
-use std::pin::Pin;
-use std::task::{Context, Poll};
-use std::io::Error;
-use std::future::Future;
+//            DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE
+//                    Version 2, December 2004
+//
+// Copyleft (ↄ) meh. <meh@schizofreni.co> | http://meh.schizofreni.co
+//
+// Everyone is permitted to copy and distribute verbatim or modified
+// copies of this license document, and changing it is allowed as long
+// as the name is changed.
+//
+//            DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE
+//   TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
+//
+//  0. You just DO WHAT THE FUCK YOU WANT TO.
 
-#[tokio::main]
-async fn main() -> std::io::Result<()> {
+use std::io::Read;
+
+fn main() {
     let mut config = tun::Configuration::default();
     config
         .address((10, 0, 0, 2))
@@ -22,13 +25,8 @@ async fn main() -> std::io::Result<()> {
         config.platform(|config| {
         config.packet_information(true);
     });
-    let mut dev = tun::create_as_async(&config).unwrap();
-    let address = "127.0.0.1:8081".parse::<SocketAddr>().unwrap();
-    let sock = TcpSocket::new_v4()?;
-    let mut stream = sock.connect(address).await?;
-    println!("started");
-    let (u, d) = tokio::io::copy_bidirectional(&mut dev, &mut stream).await?;
-    println!("up: {}, down: {}", u, d);
-    stream.shutdown().await?;
-    Ok(())
+    let mut dev = tun::create(&config).unwrap();
+    let mut stream = std::net::TcpStream::connect("127.0.0.1:8081").unwrap();
+    let s = std::io::copy(&mut dev, &mut stream);
+    println!("{:?} bytes copied", s);
 }
