@@ -23,12 +23,11 @@ use std::vec::Vec;
 use crate::configuration::{Configuration, Layer};
 use crate::device::Device as D;
 use crate::error::*;
-use wintun::{Session, Packet, WintunError, Wintun};
+use wintun::{Session, Packet, WintunError, Wintun, Adapter};
 use packet;
 use crate::platform::windows::{TryRead, TryWrite};
 use ipconfig::{get_adapters, Adapter as IpAdapter};
 use std::process::Command;
-// use std::error::Error;
 
 /// A TUN device using the wintun driver.
 pub struct Device {
@@ -39,25 +38,21 @@ pub struct Device {
 impl Device {
     /// Create a new `Device` for the given `Configuration`.
     pub fn new(config: &Configuration) -> Result<Self> {
-        let wintun = unsafe { wintun::load() }
-            .expect("Failed to load wintun dll");
-        let version = wintun::get_running_driver_version(&wintun);
-        println!("Using wintun version: {:?}", version);
-
+        let wintun = unsafe { wintun::load() }.expect("Failed to load wintun dll");
         let n = config.name.clone().unwrap_or("wintun".to_string());
-        // let name = &n[..];
         let name = n.clone();
         let adapter = match wintun::Adapter::open(&wintun, name.as_str()) {
             Ok(a) => a,
             Err(_) => wintun::Adapter::create(&wintun, name.as_str(), name.as_str(), None)
                 .expect("Failed to create wintun adapter!"),
         };
-        let session = Arc::new(adapter.start_session(wintun::MAX_RING_CAPACITY).unwrap());
-
+        let session = adapter.start_session(wintun::MAX_RING_CAPACITY).map_err(|e|
+            Error::InvalidConfig
+        )?;
+        let session = Arc::new(session);
         let address = config.address.clone().unwrap_or("10.0.0.2".parse().unwrap());
         let destination = config.destination.clone().unwrap_or("10.0.0.1".parse().unwrap());
         let netmask = config.netmask.clone().unwrap_or("255.255.255.0".parse().unwrap());
-
         let out = Command::new("netsh")
             .arg("interface").arg("ipv4").arg("set").arg("address")
             .arg(format!("name={}", n))
@@ -66,9 +61,7 @@ impl Device {
             .arg(format!("mask={}", netmask.to_string()))
             .arg(format!("gateway={}", destination.to_string()))
             .output()
-            .expect("failed to execute command");
-        // io::stdout().write_all(&out.stdout).unwrap();
-        // io::stderr().write_all(&out.stderr).unwrap();
+            .map_err(|e| Error::InvalidConfig)?;
         assert!(out.status.success());
         let mut device = Device {
             name: name.clone(),
