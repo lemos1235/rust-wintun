@@ -55,13 +55,13 @@ impl Device {
         let netmask = config.netmask.clone().unwrap_or("255.255.255.0".parse().unwrap());
         let out = Command::new("netsh")
             .arg("interface").arg("ipv4").arg("set").arg("address")
-            .arg(format!("name={}", n))
-            .arg(format!("source={}", "static"))
-            .arg(format!("address={}", address.to_string()))
-            .arg(format!("mask={}", netmask.to_string()))
-            .arg(format!("gateway={}", destination.to_string()))
+            .arg(name.as_str())
+            .arg("static")
+            .arg(address.to_string())
+            .arg(netmask.to_string())
+            .arg(destination.to_string())
             .output()
-            .map_err(|e| Error::InvalidConfig)?;
+            .expect("failed to execute command");
         assert!(out.status.success());
         let mut device = Device {
             name: name.clone(),
