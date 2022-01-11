@@ -59,40 +59,17 @@ impl Device {
         let netmask = config.netmask.clone().unwrap_or("255.255.255.0".parse().unwrap());
 
         let out = Command::new("netsh")
-            .arg("interface").arg("ip").arg("set").arg("address")
+            .arg("interface").arg("ipv4").arg("set").arg("address")
             .arg(format!("name={}", n))
             .arg(format!("source={}", "static"))
-            .arg(format!("address={}", address))
-            .arg(format!("mask={}", netmask))
-            .arg(format!("gateway={}", destination))
+            .arg(format!("address={}", address.to_string()))
+            .arg(format!("mask={}", netmask.to_string()))
+            .arg(format!("gateway={}", destination.to_string()))
             .output()
             .expect("failed to execute command");
-        // println!("status: {}", out.status);
-        io::stdout().write_all(&out.stdout).unwrap();
-        io::stderr().write_all(&out.stderr).unwrap();
+        // io::stdout().write_all(&out.stdout).unwrap();
+        // io::stderr().write_all(&out.stderr).unwrap();
         assert!(out.status.success());
-        // let out = String::from_utf8_lossy(&out.stdout).to_string();
-        // let cols: Vec<&str> = out
-        //     .lines()
-        //     .filter(|l| l.contains("via"))
-        //     .next()
-        //     .unwrap()
-        //     .split_whitespace()
-        //     .map(str::trim)
-        //     .collect();
-        // assert!(cols.len() >= 3);
-        // let res = cols[2].to_string();
-
-        // let adapters = ipconfig::get_adapters().map_err(|e| Error::InvalidConfig )?;
-        // println!("{}", adapters.len());
-        // let iff= adapters.iter().filter(| &a| {
-        //    return  a.friendly_name().eq( name.clone().as_str())
-        // }).last().unwrap();
-        // config.address
-        // iff.ip_addresses()
-        // println!("{:?}", iff.friendly_name());
-        // adapters.binary_search_by(|probe| probe.cmp(&seek));
-
         let mut device = Device {
             name: name.clone(),
             queue: Queue { session: session },
