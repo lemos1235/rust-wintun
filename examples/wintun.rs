@@ -7,12 +7,8 @@ use std::sync::{
 static RUNNING: AtomicBool = AtomicBool::new(true);
 
 fn main() {
-    // env_logger::init();
-    let wintun = unsafe { wintun::load_from_path("wintun.dll") }
+    let wintun = unsafe { wintun::load() }
         .expect("Failed to load wintun dll");
-
-    let version = wintun::get_running_driver_version(&wintun);
-    println!("Using wintun version: {:?}", version);
 
     let adapter = match wintun::Adapter::open(&wintun, "Demo") {
         Ok(a) => a,

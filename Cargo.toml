@@ -30,6 +30,12 @@ ioctl = { version = "0.6", package = "ioctl-sys" }
 wintun = "0.2.1"
 packet = "0.1"
 ipconfig = "0.3.0"
+log = "0.4"
+env_logger = "0.9.0"
+winapi = "0.3"
+subprocess = "0.2"
+widestring = "0.5"
+pcap-file = "1.1"
 # MARKER END
 
 [dev-dependencies]
@@ -53,6 +59,9 @@ required-features = [ "async", "tokio/rt-multi-thread" ]
 
 [[example]]
 name = "wintun"
+
+[[example]]
+name = "wireshark"
 
 [[example]]
 name = "tun2udp"

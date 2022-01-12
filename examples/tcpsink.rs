@@ -4,6 +4,10 @@ use std::env;
 use tokio::net::TcpListener;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use std::{io, io::Write};
+use tokio_util::codec::Framed;
+use tun::TunPacketCodec;
+use packet::ip::Packet;
+use futures::StreamExt;
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
@@ -15,21 +19,14 @@ async fn main() -> std::io::Result<()> {
 
     loop {
         let (mut socket, _) = listener.accept().await?;
+        let codec = TunPacketCodec::new(false, 1500);
+        let mut stream = Framed::new(socket, codec);
         tokio::spawn(async move {
-            let mut buf = vec![0; 1024];
-
-            // In a loop, read data from the socket and write the data back.
-            loop {
-                let n = socket
-                    .read(&mut buf)
-                    .await
-                    .expect("failed to read data from socket");
-
-                if n == 0 {
-                    return;
+            while let Some(packet) = stream.next().await {
+                match packet {
+                    Ok(pkt) => println!("pkt: {:#?}", Packet::unchecked(pkt.get_bytes())),
+                    Err(err) => panic!("Error: {:?}", err),
                 }
-
-                io::stdout().write(buf.as_slice());
             }
         });
     }
