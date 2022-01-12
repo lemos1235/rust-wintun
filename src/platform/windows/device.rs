@@ -23,8 +23,7 @@ use std::vec::Vec;
 use crate::configuration::{Configuration, Layer};
 use crate::device::Device as D;
 use crate::error::*;
-use wintun::{Session, Packet, WintunError, Wintun, Adapter};
-use packet;
+use wintun::Session;
 use crate::platform::windows::{TryRead, TryWrite};
 use ipconfig::{get_adapters, Adapter as IpAdapter};
 use std::process::Command;
@@ -69,15 +68,6 @@ impl Device {
         };
         device.configure(&config)?;
         Ok(device)
-    }
-
-    /// Return whether the device has packet information
-    pub fn has_packet_information(&mut self) -> bool {
-        false
-    }
-    /// Set non-blocking mode
-    pub fn set_nonblock(&self) -> io::Result<()> {
-        self.queue.set_nonblock()
     }
 
     pub fn try_read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
@@ -169,7 +159,7 @@ impl D for Device {
     }
 
     fn mtu(&self) -> Result<i32> {
-        Ok(1504)
+        Ok(1500)
     }
 
     fn set_mtu(&mut self, value: i32) -> Result<()> {
@@ -185,16 +175,6 @@ pub struct Queue {
     session: Arc<Session>,
 }
 
-impl Queue {
-    pub fn has_packet_information(&mut self) -> bool {
-        false
-    }
-
-    pub fn set_nonblock(&self) -> io::Result<()> {
-        Ok(())
-    }
-}
-
 impl TryRead for Queue {
     fn try_read(&mut self, mut buf: &mut [u8]) -> io::Result<usize> {
         let reader_session = self.session.clone();
@@ -202,9 +182,11 @@ impl TryRead for Queue {
             Err(_) => Err(io::Error::from(io::ErrorKind::Other)),
             Ok(op) => match op {
                 None => Ok(0),
-                Some(mut packet) => {
-                    io::copy(&mut packet.bytes(), &mut buf);
-                    Ok(packet.bytes().len())
+                Some(packet) => {
+                    match io::copy(&mut packet.bytes(), &mut buf) {
+                        Ok(s) => Ok(s as usize),
+                        Err(e) => Err(e)
+                    }
                 }
             }
         }
@@ -221,7 +203,7 @@ impl Read for Queue {
     fn read(&mut self, mut buf: &mut [u8]) -> io::Result<usize> {
         let reader_session = self.session.clone();
         match reader_session.receive_blocking() {
-            Ok(mut pkt) => {
+            Ok(pkt) => {
                 match io::copy(&mut pkt.bytes(), &mut buf) {
                     Ok(n) => Ok(n as usize),
                     Err(e) => Err(e)
@@ -239,9 +221,13 @@ impl Write for Queue {
         match writer_session.allocate_send_packet(size as u16) {
             Err(_) => Err(io::Error::from(io::ErrorKind::OutOfMemory)),
             Ok(mut packet) => {
-                io::copy(&mut buf, &mut packet.bytes_mut());
-                writer_session.send_packet(packet);
-                Ok(size)
+                match io::copy(&mut buf, &mut packet.bytes_mut()) {
+                    Ok(s) => {
+                        writer_session.send_packet(packet);
+                        Ok(s as usize)
+                    }
+                    Err(e) => Err(e)
+                }
             }
         }
     }

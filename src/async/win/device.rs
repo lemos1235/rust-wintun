@@ -37,9 +37,8 @@ pub struct AsyncDevice {
 impl AsyncDevice {
     /// Create a new `AsyncDevice` wrapping around a `Device`.
     pub fn new(device: Device) -> io::Result<AsyncDevice> {
-        device.set_nonblock()?;
         Ok(AsyncDevice {
-            inner:  AsyncFd::new(device)?,
+            inner: AsyncFd::new(device)?,
         })
     }
     /// Returns a shared reference to the underlying Device object
@@ -49,13 +48,12 @@ impl AsyncDevice {
 
     /// Returns a mutable reference to the underlying Device object
     pub fn get_mut(&mut self) -> &mut Device {
-         self.inner.get_mut()
+        self.inner.get_mut()
     }
 
     /// Consumes this AsyncDevice and return a Framed object (unified Stream and Sink interface)
-    pub fn into_framed(mut self) -> Framed<Self, TunPacketCodec> {
-        let pi = self.get_mut().has_packet_information();
-        let codec = TunPacketCodec::new(pi, self.get_ref().mtu().unwrap_or(1504));
+    pub fn into_framed(self) -> Framed<Self, TunPacketCodec> {
+        let codec = TunPacketCodec::new(false, self.get_ref().mtu().unwrap_or(1504));
         Framed::new(self, codec)
     }
 }
@@ -68,23 +66,29 @@ impl AsyncRead for AsyncDevice {
     ) -> Poll<io::Result<()>> {
         let rbuf = buf.initialize_unfilled();
         match self.inner.try_read(rbuf) {
-            Ok(0) => return Poll::Pending,
-            Ok(n) => {
-                buf.advance(n);
-                return Poll::Ready(Ok(()));
+            Ok(0) => {
+                println!("pending");
+                return Poll::Ready(Ok(()))
             },
-            Err(e) => Poll::Ready(Err(e))
+            Ok(n) => {
+                println!("try_read");
+                buf.advance(n);
+                return Poll::Ready(Ok(()))
+            },
+            Err(e) => {
+                println!("eerr");
+                return Poll::Ready(Err(e))
+            },
         }
-
         // loop {
         //     let rbuf = buf.initialize_unfilled();
-        //     match self.inner.read(rbuf) {
+        //     match self.inner.try_read(rbuf) {
         //         Ok(0) => return Poll::Pending,
         //         Ok(n) => {
         //             buf.advance(n);
-        //             return Poll::Ready(Ok(()));
+        //             return Poll::Ready(Ok(()))
         //         },
-        //         Err(_) => continue,
+        //         Err(e) => continue,
         //     }
         // }
     }
@@ -98,19 +102,18 @@ impl AsyncWrite for AsyncDevice {
     ) -> Poll<io::Result<usize>> {
         match self.inner.try_write(buf) {
             Ok(n) => return Poll::Ready(Ok(n)),
-            Err(e) => return Poll::Ready(Err(e))
+            Err(e) => return Poll::Ready(Err(e)),
         }
+
         // loop {
-        //
-        // //     let mut guard = ready!(self.inner.poll_write_ready_mut(cx))?;
-        // //     match guard.try_io(|inner| inner.get_mut().write(buf)) {
-        // //         Ok(res) => return Poll::Ready(res),
-        // //         Err(_wb) => continue,
-        // //     }
+        //     match self.inner.try_write(buf) {
+        //         Ok(n) => return Poll::Ready(Ok(n)),
+        //         Err(e) => continue,
+        //     }
         // }
     }
 
-    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         Poll::Ready(Ok(()))
     }
 
@@ -127,7 +130,6 @@ pub struct AsyncQueue {
 impl AsyncQueue {
     /// Create a new `AsyncQueue` wrapping around a `Queue`.
     pub fn new(queue: Queue) -> io::Result<AsyncQueue> {
-        queue.set_nonblock()?;
         Ok(AsyncQueue {
             inner: AsyncFd::new(queue)?,
         })
@@ -139,13 +141,12 @@ impl AsyncQueue {
 
     /// Returns a mutable reference to the underlying Queue object
     pub fn get_mut(&mut self) -> &mut Queue {
-         self.inner.get_mut()
+        self.inner.get_mut()
     }
 
     /// Consumes this AsyncQueue and return a Framed object (unified Stream and Sink interface)
-    pub fn into_framed(mut self) -> Framed<Self, TunPacketCodec> {
-        let pi = self.get_mut().has_packet_information();
-        let codec = TunPacketCodec::new(pi, 1504);
+    pub fn into_framed(self) -> Framed<Self, TunPacketCodec> {
+        let codec = TunPacketCodec::new(false, 1500);
         Framed::new(self, codec)
     }
 }
@@ -158,24 +159,22 @@ impl AsyncRead for AsyncQueue {
     ) -> Poll<io::Result<()>> {
         let rbuf = buf.initialize_unfilled();
         match self.inner.try_read(rbuf) {
-            Ok(0) => return Poll::Pending,
+            Ok(0) => return Poll::Ready(Ok(())),
             Ok(n) => {
                 buf.advance(n);
                 return Poll::Ready(Ok(()));
-            },
-            Err(e) => Poll::Ready(Err(e))
+            }
+            Err(e) =>  return Poll::Ready(Err(e)),
         }
-
         // loop {
         //     let rbuf = buf.initialize_unfilled();
-        //
         //     match self.inner.try_read(rbuf) {
         //         Ok(0) => return Poll::Pending,
         //         Ok(n) => {
         //             buf.advance(n);
         //             return Poll::Ready(Ok(()));
-        //         },
-        //         Err(_) => continue,
+        //         }
+        //         Err(e) => continue,
         //     }
         // }
     }
@@ -189,19 +188,17 @@ impl AsyncWrite for AsyncQueue {
     ) -> Poll<io::Result<usize>> {
         match self.inner.try_write(buf) {
             Ok(n) => return Poll::Ready(Ok(n)),
-            Err(e) => return Poll::Ready(Err(e))
+            Err(e) => return Poll::Ready(Err(e)),
         }
-        // self.inner.write(buf)
-        // // let writer_session = self.inner.read2()
-        // let mut packet = writer_session.allocate_send_packet(buf.len() as u16).unwrap();
-        // let b = packet::buffer::Slice::new(packet.bytes_mut());
-        // // packet::ip::v4::Builder::with(b)
-        //
-        // writer_session.send_packet(packet);
-        // Ok(buf.len())
+        // loop {
+        //     match self.inner.try_write(buf) {
+        //         Ok(n) => return Poll::Ready(Ok(n)),
+        //         Err(e) => continue,
+        //     }
+        // }
     }
 
-    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         Poll::Ready(Ok(()))
     }
 

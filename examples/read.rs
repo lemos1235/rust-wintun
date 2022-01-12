@@ -12,7 +12,8 @@
 //
 //  0. You just DO WHAT THE FUCK YOU WANT TO.
 
-use std::io::Read;
+use std::io::{Error, Read};
+use packet::ip::Packet;
 
 fn main() {
     let mut config = tun::Configuration::default();
@@ -33,6 +34,6 @@ fn main() {
 
     loop {
         let amount = dev.read(&mut buf).unwrap();
-        println!("{:?}", &buf[0..amount]);
+        println!("pkt: {:#?}", Packet::unchecked(&buf[0..amount]));
     }
 }
