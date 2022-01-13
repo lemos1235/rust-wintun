@@ -17,7 +17,7 @@ use std::io::{self, ErrorKind, Read, Write};
 use std::{mem, thread};
 use std::net::Ipv4Addr;
 use std::ptr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::vec::Vec;
 
 use crate::configuration::{Configuration, Layer};
@@ -69,7 +69,7 @@ impl Device {
             name: name.clone(),
             queue: Queue {
                 session: session,
-                cached: Arc::new(Vec::with_capacity(1504)),
+                cached: Arc::new(Mutex::new(Vec::with_capacity(1504))),
             },
         };
         device.configure(&config)?;
@@ -187,7 +187,7 @@ impl D for Device {
 
 pub struct Queue {
     session: Arc<Session>,
-    cached: Arc<Vec<u8>>,
+    cached: Arc<Mutex<Vec<u8>>>,
 }
 
 impl Queue {
@@ -196,12 +196,16 @@ impl Queue {
         cx: &mut Context<'_>,
         mut buf: &mut [u8],
     ) -> Poll<io::Result<usize>> {
-        if self.cached.len() > 0 {
-            return match io::copy(&mut self.cached.as_slice(), &mut buf) {
-                Ok(n) => Poll::Ready(Ok(n as usize)),
-                Err(e) => Poll::Ready(Err(e))
-            };
+        {
+            let guard = self.cached.lock().unwrap();
+            if guard.len() > 0 {
+                return match io::copy(&mut guard.as_slice(), &mut buf) {
+                    Ok(n) => Poll::Ready(Ok(n as usize)),
+                    Err(e) => Poll::Ready(Err(e))
+                };
+            }
         }
+
         let reader_session = self.session.clone();
         match reader_session.try_receive() {
             Err(_) => Poll::Ready(Err(io::Error::from(io::ErrorKind::Other))),
@@ -210,26 +214,23 @@ impl Queue {
                     Ok(n) => Poll::Ready(Ok(n as usize)),
                     Err(e) => Poll::Ready(Err(e))
                 }
-            }
+            },
             Ok(None) => {
                 let waker = cx.waker().clone();
                 let mut cached = self.cached.clone();
                 thread::spawn(move || {
+                    let mut guard = cached.lock().unwrap();
                     match reader_session.receive_blocking(){
-                        Ok(packet) => {
-                            match io::copy(&mut packet.bytes(), &mut  self.cached.as_mut_slice()) {
-                                Ok(_) => {}
-                                Err(_) => {}
-                            }
-                            println!("{:?}",cached);
-                                ()
+                        Ok(mut packet) => {
+                            guard.clear();
+                            guard.extend_from_slice(& packet.bytes());
                         }
                         Err(e) => {}
                     }
                     waker.wake()
                 });
                 Poll::Pending
-            }
+            },
         }
     }
 }

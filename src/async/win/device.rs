@@ -27,6 +27,7 @@ use wintun::Session;
 
 use crate::device::Device as D;
 use crate::platform::{Device, Queue};
+use crate::platform::windows::TryWrite;
 use crate::r#async::codec::*;
 
 /// An async TUN device wrapper around a TUN device.
@@ -65,22 +66,21 @@ impl AsyncRead for AsyncDevice {
         buf: &mut ReadBuf,
     ) -> Poll<io::Result<()>> {
         let rbuf = buf.initialize_unfilled();
-        // match self.inner.try_read(rbuf) {
-        //     Ok(0) => {
-        //
-        //         println!("pending");
-        //         return Poll::Ready(Ok(()))
-        //     },
-        //     Ok(n) => {
-        //         println!("try_read");
-        //         buf.advance(n);
-        //         return Poll::Ready(Ok(()))
-        //     },
-        //     Err(e) => {
-        //         println!("eerr");
-        //         return Poll::Ready(Err(e))
-        //     },
-        // }
+        match self.inner.try_read(rbuf) {
+            Ok(0) => {
+                println!("pending");
+                return Poll::Ready(Ok(()))
+            },
+            Ok(n) => {
+                println!("try_read");
+                buf.advance(n);
+                return Poll::Ready(Ok(()))
+            },
+            Err(e) => {
+                println!("eerr");
+                return Poll::Ready(Err(e))
+            },
+        }
     }
 }
 
@@ -203,13 +203,21 @@ impl AsyncDevice2 {
 }
 
 impl AsyncRead for AsyncDevice2 {
-    fn poll_read(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut ReadBuf<'_>) -> Poll<io::Result<()>> {
-        todo!()
+    fn poll_read(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut ReadBuf<'_>) -> Poll<io::Result<()>> {
+        let rbuf = buf.initialize_unfilled();
+        match Pin::new(&mut self.inner).poll_read(cx, rbuf) {
+            Poll::Ready(Ok(n)) => {
+                buf.advance(n);
+                Poll::Ready(Ok(()))
+            },
+            Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
+            Poll::Pending => Poll::Pending,
+        }
     }
 }
 
 impl AsyncWrite for AsyncDevice2 {
-    fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize, Error>> {
+    fn poll_write(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize, Error>> {
         match self.inner.try_write(buf) {
             Ok(n) => return Poll::Ready(Ok(n)),
             Err(e) => return Poll::Ready(Err(e)),
@@ -254,10 +262,13 @@ impl AsyncQueue2 {
 }
 
 impl AsyncRead for AsyncQueue2 {
-    fn poll_read(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut ReadBuf<'_>) -> Poll<io::Result<()>> {
+    fn poll_read(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut ReadBuf<'_>) -> Poll<io::Result<()>> {
         let rbuf = buf.initialize_unfilled();
-        match self.inner.poll_read(cx, rbuf) {
-            Poll::Ready(Ok(n)) => Poll::Ready(Ok(())),
+        match Pin::new(&mut self.inner).poll_read(cx, rbuf) {
+            Poll::Ready(Ok(n)) =>{
+                buf.advance(n);
+                Poll::Ready(Ok(()))
+            },
             Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
             Poll::Pending => Poll::Pending,
         }
@@ -265,7 +276,7 @@ impl AsyncRead for AsyncQueue2 {
 }
 
 impl AsyncWrite for AsyncQueue2 {
-    fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize, Error>> {
+    fn poll_write(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize, Error>> {
         match self.inner.try_write(buf) {
             Ok(n) => return Poll::Ready(Ok(n)),
             Err(e) => return Poll::Ready(Err(e)),
