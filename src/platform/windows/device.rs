@@ -14,7 +14,7 @@
 
 use std::ffi::{CStr, CString};
 use std::io::{self, ErrorKind, Read, Write};
-use std::mem;
+use std::{mem, thread};
 use std::net::Ipv4Addr;
 use std::ptr;
 use std::sync::Arc;
@@ -23,10 +23,13 @@ use std::vec::Vec;
 use crate::configuration::{Configuration, Layer};
 use crate::device::Device as D;
 use crate::error::*;
-use wintun::Session;
+use wintun::{Session, Packet};
 use crate::platform::windows::{TryRead, TryWrite};
 use ipconfig::{get_adapters, Adapter as IpAdapter};
 use std::process::Command;
+use std::task::{Context, Poll};
+use std::pin::Pin;
+use std::time::Duration;
 
 /// A TUN device using the wintun driver.
 pub struct Device {
@@ -64,7 +67,10 @@ impl Device {
         assert!(out.status.success());
         let mut device = Device {
             name: name.clone(),
-            queue: Queue { session: session },
+            queue: Queue {
+                session: session,
+                cached: Arc::new(Vec::with_capacity(1504)),
+            },
         };
         device.configure(&config)?;
         Ok(device)
@@ -72,6 +78,14 @@ impl Device {
 
     pub fn try_read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.queue.try_read(buf)
+    }
+
+    pub fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut [u8],
+    ) -> Poll<io::Result<usize>> {
+        Pin::new(&mut self.queue).poll_read(cx, buf)
     }
 }
 
@@ -173,6 +187,51 @@ impl D for Device {
 
 pub struct Queue {
     session: Arc<Session>,
+    cached: Arc<Vec<u8>>,
+}
+
+impl Queue {
+    pub fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        mut buf: &mut [u8],
+    ) -> Poll<io::Result<usize>> {
+        if self.cached.len() > 0 {
+            return match io::copy(&mut self.cached.as_slice(), &mut buf) {
+                Ok(n) => Poll::Ready(Ok(n as usize)),
+                Err(e) => Poll::Ready(Err(e))
+            };
+        }
+        let reader_session = self.session.clone();
+        match reader_session.try_receive() {
+            Err(_) => Poll::Ready(Err(io::Error::from(io::ErrorKind::Other))),
+            Ok(Some(packet)) => {
+                match io::copy(&mut packet.bytes(), &mut buf) {
+                    Ok(n) => Poll::Ready(Ok(n as usize)),
+                    Err(e) => Poll::Ready(Err(e))
+                }
+            }
+            Ok(None) => {
+                let waker = cx.waker().clone();
+                let mut cached = self.cached.clone();
+                thread::spawn(move || {
+                    match reader_session.receive_blocking(){
+                        Ok(packet) => {
+                            match io::copy(&mut packet.bytes(), &mut  self.cached.as_mut_slice()) {
+                                Ok(_) => {}
+                                Err(_) => {}
+                            }
+                            println!("{:?}",cached);
+                                ()
+                        }
+                        Err(e) => {}
+                    }
+                    waker.wake()
+                });
+                Poll::Pending
+            }
+        }
+    }
 }
 
 impl TryRead for Queue {

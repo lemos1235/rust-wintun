@@ -2,6 +2,7 @@ use std::io;
 use crate::{create, Device};
 use std::task::{Poll, Context};
 use crate::platform::windows::{TryRead, TryWrite};
+use crate::platform::windows::Device as D;
 
 pub(crate) struct AsyncFd<T: TryRead + TryWrite> {
     inner: T,
