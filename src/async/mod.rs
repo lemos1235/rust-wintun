@@ -27,7 +27,7 @@ pub use self::device::{AsyncDevice, AsyncQueue};
 #[cfg(target_os = "windows")]
 mod win;
 #[cfg(target_os = "windows")]
-pub use win::device::{AsyncDevice2 as AsyncDevice , AsyncQueue2 as AsyncQueue};
+pub use win::device::{AsyncDevice, AsyncQueue};
 
 mod codec;
 pub use self::codec::{TunPacket, TunPacketCodec};

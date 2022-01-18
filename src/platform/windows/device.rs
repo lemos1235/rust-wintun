@@ -24,8 +24,6 @@ use crate::configuration::{Configuration, Layer};
 use crate::device::Device as D;
 use crate::error::*;
 use wintun::{Session, Packet};
-use crate::platform::windows::{TryRead, TryWrite};
-use ipconfig::{get_adapters, Adapter as IpAdapter};
 use std::process::Command;
 use std::task::{Context, Poll};
 use std::pin::Pin;
@@ -33,7 +31,6 @@ use std::time::Duration;
 
 /// A TUN device using the wintun driver.
 pub struct Device {
-    name: String,
     queue: Queue,
 }
 
@@ -66,7 +63,6 @@ impl Device {
             .expect("failed to execute command");
         assert!(out.status.success());
         let mut device = Device {
-            name: name.clone(),
             queue: Queue {
                 session: session,
                 cached: Arc::new(Mutex::new(Vec::with_capacity(1504))),
@@ -76,28 +72,12 @@ impl Device {
         Ok(device)
     }
 
-    pub fn try_read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        self.queue.try_read(buf)
-    }
-
     pub fn poll_read(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &mut [u8],
     ) -> Poll<io::Result<usize>> {
         Pin::new(&mut self.queue).poll_read(cx, buf)
-    }
-}
-
-impl TryRead for Device {
-    fn try_read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        self.queue.try_read(buf)
-    }
-}
-
-impl TryWrite for Device {
-    fn try_write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.queue.try_write(buf)
     }
 }
 
@@ -129,7 +109,7 @@ impl D for Device {
     type Queue = Queue;
 
     fn name(&self) -> &str {
-        self.name.as_str()
+        unimplemented!()
     }
 
     fn set_name(&mut self, value: &str) -> Result<()> {
@@ -197,15 +177,16 @@ impl Queue {
         mut buf: &mut [u8],
     ) -> Poll<io::Result<usize>> {
         {
-            let guard = self.cached.lock().unwrap();
+            let mut guard = self.cached.lock().unwrap();
             if guard.len() > 0 {
-                return match io::copy(&mut guard.as_slice(), &mut buf) {
+                let res = match io::copy(&mut guard.as_slice(), &mut buf) {
                     Ok(n) => Poll::Ready(Ok(n as usize)),
                     Err(e) => Poll::Ready(Err(e))
                 };
+                guard.clear();
+                return res;
             }
         }
-
         let reader_session = self.session.clone();
         match reader_session.try_receive() {
             Err(_) => Poll::Ready(Err(io::Error::from(io::ErrorKind::Other))),
@@ -214,28 +195,23 @@ impl Queue {
                     Ok(n) => Poll::Ready(Ok(n as usize)),
                     Err(e) => Poll::Ready(Err(e))
                 }
-            },
+            }
             Ok(None) => {
                 let waker = cx.waker().clone();
                 let mut cached = self.cached.clone();
                 thread::spawn(move || {
                     let mut guard = cached.lock().unwrap();
-                    match reader_session.receive_blocking(){
-                        Ok(mut packet) => {
-                            guard.clear();
-                            guard.extend_from_slice(& packet.bytes());
-                        }
+                    match reader_session.receive_blocking() {
+                        Ok(mut packet) => guard.extend_from_slice(&packet.bytes()),
                         Err(e) => {}
                     }
                     waker.wake()
                 });
                 Poll::Pending
-            },
+            }
         }
     }
-}
 
-impl TryRead for Queue {
     fn try_read(&mut self, mut buf: &mut [u8]) -> io::Result<usize> {
         let reader_session = self.session.clone();
         match reader_session.try_receive() {
@@ -250,12 +226,6 @@ impl TryRead for Queue {
                 }
             }
         }
-    }
-}
-
-impl TryWrite for Queue {
-    fn try_write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.write(buf)
     }
 }
 

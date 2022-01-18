@@ -56,7 +56,7 @@ impl PacketProtocol {
     // MARKER BEGIN
     #[cfg(target_os = "windows")]
     fn into_pi_field(&self) -> Result<u16, io::Error> {
-        Ok(0x800 as u16)
+        unimplemented!()
     }
     // MARKER END
 }
