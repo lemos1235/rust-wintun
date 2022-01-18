@@ -49,16 +49,21 @@ impl Device {
             Error::InvalidConfig
         )?;
         let session = Arc::new(session);
-        let address = config.address.clone().unwrap_or("10.0.0.2".parse().unwrap());
-        let destination = config.destination.clone().unwrap_or("10.0.0.1".parse().unwrap());
-        let netmask = config.netmask.clone().unwrap_or("255.255.255.0".parse().unwrap());
+
+        let address = config.address.clone()
+            .map_or_else(|| "10.1.0.2".to_string(), |a| a.to_string());
+        let destination = config.destination.clone()
+            .map_or_else(|| "".to_string(), |a| a.to_string());
+        let netmask = config.netmask.clone()
+            .map_or_else(||"255.255.255.0".to_string(), |a| a.to_string());
         let out = Command::new("netsh")
             .arg("interface").arg("ipv4").arg("set").arg("address")
             .arg(name.as_str())
             .arg("static")
-            .arg(address.to_string())
-            .arg(netmask.to_string())
-            .arg(destination.to_string())
+            .arg(address)
+            .arg(netmask)
+            .arg(destination)
+            .arg("store=active")
             .output()
             .expect("failed to execute command");
         assert!(out.status.success());
