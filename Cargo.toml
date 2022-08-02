@@ -34,7 +34,7 @@ log = "0.4"
 env_logger = "0.9.0"
 winapi = "0.3"
 subprocess = "0.2"
-widestring = "0.5"
+widestring = "1.0.2"
 pcap-file = "1.1"
 # MARKER END
 
@@ -44,10 +44,6 @@ futures = "0.3"
 
 [features]
 async = ["tokio", "tokio-util", "bytes", "byteorder", "futures-core"]
-
-
-[[example]]
-name = "read"
 
 [[example]]
 name = "read-async"
@@ -60,6 +56,10 @@ required-features = [ "async", "tokio/rt-multi-thread" ]
 [[example]]
 name = "ping-tun"
 required-features = [ "async", "tokio/rt-multi-thread" ]
+
+# MARKER BEGIN
+[[example]]
+name = "read"
 
 [[example]]
 name = "wintun"
@@ -81,3 +81,4 @@ required-features = [ "async", "tokio/rt-multi-thread", "tokio/io-util" ]
 [[example]]
 name = "tcpsink"
 required-features =  [ "async", "tokio/rt-multi-thread", "tokio/io-util" ]
+# MARKER END
