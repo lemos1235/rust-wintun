@@ -28,8 +28,6 @@ enum PacketProtocol {
 
 // Note: the protocol in the packet information header is platform dependent.
 impl PacketProtocol {
-    // MARKER BEGIN
-    // #[cfg(target_os = "linux")]
     #[cfg(any(target_os = "linux", target_os = "android"))]
     fn into_pi_field(&self) -> Result<u16, io::Error> {
         match self {
