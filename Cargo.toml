@@ -81,4 +81,12 @@ required-features = [ "async", "tokio/rt-multi-thread", "tokio/io-util" ]
 [[example]]
 name = "tcpsink"
 required-features =  [ "async", "tokio/rt-multi-thread", "tokio/io-util" ]
+
+[[example]]
+name = "udpsink"
+required-features =  [ "async", "tokio/rt-multi-thread", "tokio/io-util" ]
+
+[[example]]
+name = "tcpserver"
+required-features =  [ "async", "tokio/rt-multi-thread", "tokio/io-util" ]
 # MARKER END

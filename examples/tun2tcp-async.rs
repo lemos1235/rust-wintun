@@ -24,7 +24,7 @@ async fn main() -> std::io::Result<()> {
     });
     let mut dev = tun::create_as_async(&config).unwrap();
     let sock = TcpSocket::new_v4()?;
-    let mut stream = sock.connect("127.0.0.1:8081".parse().unwrap()).await?;
+    let mut stream = sock.connect("127.0.0.1:22168".parse().unwrap()).await?;
     println!("started");
     let (u, d) = tokio::io::copy_bidirectional(&mut dev, &mut stream).await?;
     println!("up: {}, down: {}", u, d);
