@@ -80,7 +80,10 @@ impl AsyncWrite for AsyncDevice {
     }
 
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
-        Poll::Ready(Ok(()))
+        return match self.inner.flush() {
+            Ok(n) => Poll::Ready(Ok(n)),
+            Err(e) => Poll::Ready(Err(e)),
+        }
     }
 
     fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
@@ -111,7 +114,7 @@ impl AsyncQueue {
 
     /// Consumes this AsyncQueue and return a Framed object (unified Stream and Sink interface)
     pub fn into_framed(self) -> Framed<Self, TunPacketCodec> {
-        let codec = TunPacketCodec::new(false, 1500);
+        let codec = TunPacketCodec::new(false, 1512);
         Framed::new(self, codec)
     }
 }

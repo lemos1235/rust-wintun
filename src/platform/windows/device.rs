@@ -28,6 +28,7 @@ use std::process::Command;
 use std::task::{Context, Poll};
 use std::pin::Pin;
 use std::time::Duration;
+use futures::AsyncWriteExt;
 
 /// A TUN device using the wintun driver.
 pub struct Device {
@@ -45,17 +46,27 @@ impl Device {
             Err(_) => wintun::Adapter::create(&wintun, name.as_str(), name.as_str(), None)
                 .expect("Failed to create wintun adapter!"),
         };
-        let session = adapter.start_session(wintun::MAX_RING_CAPACITY).map_err(|e|
-            Error::InvalidConfig
-        )?;
-        let session = Arc::new(session);
+        let session = Arc::new(
+            adapter
+                .start_session(wintun::MAX_RING_CAPACITY)
+                .expect("Failed to create session")
+        );
 
         let address = config.address.clone()
             .map_or_else(|| "10.1.0.2".to_string(), |a| a.to_string());
         let destination = config.destination.clone()
             .map_or_else(|| "".to_string(), |a| a.to_string());
         let netmask = config.netmask.clone()
-            .map_or_else(||"255.255.255.0".to_string(), |a| a.to_string());
+            .map_or_else(|| "255.255.255.0".to_string(), |a| a.to_string());
+        let mtu = config.mtu;
+
+        let queue = Queue {
+            session,
+            cached: Arc::new(Mutex::new(Vec::with_capacity(mtu))),
+        };
+        let mut device = Self { queue };
+
+        device.configure(&config)?;
         let out = Command::new("netsh")
             .arg("interface").arg("ipv4").arg("set").arg("address")
             .arg(name.as_str())
@@ -67,13 +78,7 @@ impl Device {
             .output()
             .expect("failed to execute command");
         assert!(out.status.success());
-        let mut device = Device {
-            queue: Queue {
-                session: session,
-                cached: Arc::new(Mutex::new(Vec::with_capacity(1504))),
-            },
-        };
-        device.configure(&config)?;
+
         Ok(device)
     }
 
