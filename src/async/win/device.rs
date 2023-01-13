@@ -14,6 +14,7 @@
 
 use std::io;
 use std::io::{ErrorKind, IoSlice, Read, Write, Error};
+use std::os::windows::io::{AsRawHandle, IntoRawHandle, RawHandle};
 
 use core::pin::Pin;
 use core::task::{Context, Poll};

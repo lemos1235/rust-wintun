@@ -15,6 +15,8 @@
 use std::net::Ipv4Addr;
 #[cfg(unix)]
 use std::os::unix::io::RawFd;
+#[cfg(windows)]
+use std::os::windows::raw::HANDLE;
 
 use crate::address::IntoAddress;
 use crate::platform;
@@ -48,6 +50,7 @@ pub struct Configuration {
     pub(crate) queues: Option<usize>,
     #[cfg(unix)] pub(crate) raw_fd: Option<RawFd>,
     #[cfg(not(unix))] pub(crate) raw_fd: Option<i32>,
+    #[cfg(windows)] pub(crate) raw_handle: Option<HANDLE>,
 }
 
 impl Configuration {
@@ -129,6 +132,11 @@ impl Configuration {
     #[cfg(not(unix))]
     pub fn raw_fd(&mut self, fd: i32) -> &mut Self {
         self.raw_fd = Some(fd);
+        self
+    }
+    #[cfg(windows)]
+    pub fn raw_handle(&mut self, handle: HANDLE) -> &mut Self {
+        self.raw_handle = Some(handle);
         self
     }
 }

@@ -12,22 +12,20 @@
 //
 //  0. You just DO WHAT THE FUCK YOU WANT TO.
 
-use std::ffi::{CStr, CString};
-use std::io::{self, ErrorKind, Read, Write};
-use std::{mem, thread};
+use std::io::{self, Read, Write};
+use std::thread;
 use std::net::Ipv4Addr;
-use std::ptr;
+use std::os::windows::io::{AsRawHandle, IntoRawHandle, RawHandle};
 use std::sync::{Arc, Mutex};
 use std::vec::Vec;
 
-use crate::configuration::{Configuration, Layer};
+use crate::configuration::Configuration;
 use crate::device::Device as D;
 use crate::error::*;
-use wintun::{Session, Packet};
+use wintun::Session;
 use std::process::Command;
 use std::task::{Context, Poll};
 use std::pin::Pin;
-use std::time::Duration;
 
 /// A TUN device using the wintun driver.
 pub struct Device {
@@ -181,7 +179,7 @@ pub struct Queue {
 
 impl Queue {
     pub fn poll_read(
-        mut self: Pin<&mut Self>,
+        self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         mut buf: &mut [u8],
     ) -> Poll<io::Result<usize>> {
@@ -207,11 +205,11 @@ impl Queue {
             }
             Ok(None) => {
                 let waker = cx.waker().clone();
-                let mut cached = self.cached.clone();
+                let cached = self.cached.clone();
                 thread::spawn(move || {
                     let mut guard = cached.lock().unwrap();
                     match reader_session.receive_blocking() {
-                        Ok(mut packet) => guard.extend_from_slice(&packet.bytes()),
+                        Ok(packet) => guard.extend_from_slice(&packet.bytes()),
                         Err(e) => {}
                     }
                     waker.wake()
@@ -235,6 +233,18 @@ impl Queue {
                 }
             }
         }
+    }
+}
+
+impl AsRawHandle for Queue {
+    fn as_raw_handle(&self) -> RawHandle {
+        todo!()
+    }
+}
+
+impl IntoRawHandle for Queue {
+    fn into_raw_handle(self) -> RawHandle {
+        todo!()
     }
 }
 
