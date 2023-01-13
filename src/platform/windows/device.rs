@@ -28,7 +28,6 @@ use std::process::Command;
 use std::task::{Context, Poll};
 use std::pin::Pin;
 use std::time::Duration;
-use futures::AsyncWriteExt;
 
 /// A TUN device using the wintun driver.
 pub struct Device {
@@ -58,11 +57,11 @@ impl Device {
             .map_or_else(|| "".to_string(), |a| a.to_string());
         let netmask = config.netmask.clone()
             .map_or_else(|| "255.255.255.0".to_string(), |a| a.to_string());
-        let mtu = config.mtu;
+        let mtu = config.mtu.unwrap_or(1500);
 
         let queue = Queue {
             session,
-            cached: Arc::new(Mutex::new(Vec::with_capacity(mtu))),
+            cached: Arc::new(Mutex::new(Vec::with_capacity(mtu as usize))),
         };
         let mut device = Self { queue };
 
