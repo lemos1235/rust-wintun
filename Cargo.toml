@@ -1,6 +1,6 @@
 [package]
 name = "tun"
-version = "0.5.4"
+version = "0.5.3"
 edition = "2018"
 
 authors = ["meh. <meh@schizofreni.co>"]
@@ -25,18 +25,8 @@ futures-core = { version = "0.3", optional = true }
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
 ioctl = { version = "0.6", package = "ioctl-sys" }
 
-# MARKER BEGIN
 [target.'cfg(target_os = "windows")'.dependencies]
 wintun = "0.2.1"
-packet = "0.1"
-ipconfig = "0.3.0"
-log = "0.4"
-env_logger = "0.9.0"
-winapi = "0.3"
-subprocess = "0.2"
-widestring = "1.0.2"
-pcap-file = "1.1"
-# MARKER END
 
 [dev-dependencies]
 packet = "0.1"
@@ -56,37 +46,3 @@ required-features = [ "async", "tokio/rt-multi-thread" ]
 [[example]]
 name = "ping-tun"
 required-features = [ "async", "tokio/rt-multi-thread" ]
-
-# MARKER BEGIN
-[[example]]
-name = "read"
-
-[[example]]
-name = "wintun"
-
-[[example]]
-name = "wireshark"
-
-[[example]]
-name = "tun2udp"
-required-features = [ "async", "tokio/rt-multi-thread", "tokio/io-util" ]
-
-[[example]]
-name = "tun2tcp"
-
-[[example]]
-name = "tun2tcp-async"
-required-features = [ "async", "tokio/rt-multi-thread", "tokio/io-util" ]
-
-[[example]]
-name = "tcpsink"
-required-features =  [ "async", "tokio/rt-multi-thread", "tokio/io-util" ]
-
-[[example]]
-name = "udpsink"
-required-features =  [ "async", "tokio/rt-multi-thread", "tokio/io-util" ]
-
-[[example]]
-name = "tcpserver"
-required-features =  [ "async", "tokio/rt-multi-thread", "tokio/io-util" ]
-# MARKER END
