@@ -12,18 +12,13 @@
 //
 //  0. You just DO WHAT THE FUCK YOU WANT TO.
 
-use std::io;
-use std::io::{ErrorKind, IoSlice, Read, Write, Error};
-use std::os::windows::io::{AsRawHandle, IntoRawHandle, RawHandle};
-
 use core::pin::Pin;
 use core::task::{Context, Poll};
-use std::sync::Arc;
-use futures_core::ready;
+use std::io;
+use std::io::{Error, Write};
 
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio_util::codec::Framed;
-use wintun::Session;
 
 use crate::device::Device as D;
 use crate::platform::{Device, Queue};
@@ -33,13 +28,10 @@ pub struct AsyncDevice {
     inner: Device,
 }
 
-
 impl AsyncDevice {
     /// Create a new `AsyncDevice` wrapping around a `Device`.
     pub fn new(device: Device) -> io::Result<AsyncDevice> {
-        Ok(AsyncDevice {
-            inner: device,
-        })
+        Ok(AsyncDevice { inner: device })
     }
     /// Returns a shared reference to the underlying Device object
     pub fn get_ref(&self) -> &Device {
@@ -59,13 +51,17 @@ impl AsyncDevice {
 }
 
 impl AsyncRead for AsyncDevice {
-    fn poll_read(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut ReadBuf<'_>) -> Poll<io::Result<()>> {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
         let rbuf = buf.initialize_unfilled();
         match Pin::new(&mut self.inner).poll_read(cx, rbuf) {
             Poll::Ready(Ok(n)) => {
                 buf.advance(n);
                 Poll::Ready(Ok(()))
-            },
+            }
             Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
             Poll::Pending => Poll::Pending,
         }
@@ -73,7 +69,11 @@ impl AsyncRead for AsyncDevice {
 }
 
 impl AsyncWrite for AsyncDevice {
-    fn poll_write(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize, Error>> {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<Result<usize, Error>> {
         match self.inner.write(buf) {
             Ok(n) => return Poll::Ready(Ok(n)),
             Err(e) => return Poll::Ready(Err(e)),
@@ -84,7 +84,7 @@ impl AsyncWrite for AsyncDevice {
         return match self.inner.flush() {
             Ok(n) => Poll::Ready(Ok(n)),
             Err(e) => Poll::Ready(Err(e)),
-        }
+        };
     }
 
     fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
@@ -99,9 +99,7 @@ pub struct AsyncQueue {
 impl AsyncQueue {
     /// Create a new `AsyncQueue` wrapping around a `Queue`.
     pub fn new(queue: Queue) -> io::Result<AsyncQueue> {
-        Ok(AsyncQueue {
-            inner: queue,
-        })
+        Ok(AsyncQueue { inner: queue })
     }
     /// Returns a shared reference to the underlying Queue object
     pub fn get_ref(&self) -> &Queue {
@@ -121,13 +119,17 @@ impl AsyncQueue {
 }
 
 impl AsyncRead for AsyncQueue {
-    fn poll_read(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut ReadBuf<'_>) -> Poll<io::Result<()>> {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
         let rbuf = buf.initialize_unfilled();
         match Pin::new(&mut self.inner).poll_read(cx, rbuf) {
-            Poll::Ready(Ok(n)) =>{
+            Poll::Ready(Ok(n)) => {
                 buf.advance(n);
                 Poll::Ready(Ok(()))
-            },
+            }
             Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
             Poll::Pending => Poll::Pending,
         }
@@ -135,7 +137,11 @@ impl AsyncRead for AsyncQueue {
 }
 
 impl AsyncWrite for AsyncQueue {
-    fn poll_write(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize, Error>> {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<Result<usize, Error>> {
         match self.inner.write(buf) {
             Ok(n) => return Poll::Ready(Ok(n)),
             Err(e) => return Poll::Ready(Err(e)),

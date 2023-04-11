@@ -10,6 +10,21 @@ description = "TUN device creation and handling."
 repository = "https://github.com/meh/rust-tun"
 keywords = ["tun", "network", "tunnel", "bindings"]
 
+[features]
+async = ["tokio", "tokio-util", "bytes", "byteorder", "futures-core"]
+
+[[example]]
+name = "read-async"
+required-features = [ "async", "tokio/rt-multi-thread" ]
+
+[[example]]
+name = "read-async-codec"
+required-features = [ "async", "tokio/rt-multi-thread" ]
+
+[[example]]
+name = "ping-tun"
+required-features = [ "async", "tokio/rt-multi-thread" ]
+
 [dependencies]
 libc = "0.2"
 thiserror = "1"
@@ -31,18 +46,3 @@ wintun = "0.2.1"
 [dev-dependencies]
 packet = "0.1"
 futures = "0.3"
-
-[features]
-async = ["tokio", "tokio-util", "bytes", "byteorder", "futures-core"]
-
-[[example]]
-name = "read-async"
-required-features = [ "async", "tokio/rt-multi-thread" ]
-
-[[example]]
-name = "read-async-codec"
-required-features = [ "async", "tokio/rt-multi-thread" ]
-
-[[example]]
-name = "ping-tun"
-required-features = [ "async", "tokio/rt-multi-thread" ]

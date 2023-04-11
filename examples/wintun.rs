@@ -1,4 +1,3 @@
-//use log::*;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
@@ -6,9 +5,12 @@ use std::sync::{
 
 static RUNNING: AtomicBool = AtomicBool::new(true);
 
+/// Plz run with administrator privileges!
 fn main() {
-    let wintun = unsafe { wintun::load() }
-        .expect("Failed to load wintun dll");
+    let wintun = unsafe { wintun::load() }.expect("Failed to load wintun dll");
+
+    let version = wintun::get_running_driver_version(&wintun);
+    println!("Using wintun version: {:?}", version);
 
     let adapter = match wintun::Adapter::open(&wintun, "Demo") {
         Ok(a) => a,

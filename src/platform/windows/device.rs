@@ -13,19 +13,19 @@
 //  0. You just DO WHAT THE FUCK YOU WANT TO.
 
 use std::io::{self, Read, Write};
-use std::thread;
 use std::net::Ipv4Addr;
-use std::os::windows::io::{AsRawHandle, IntoRawHandle, RawHandle};
+use std::pin::Pin;
+use std::process::Command;
 use std::sync::{Arc, Mutex};
+use std::task::{Context, Poll};
+use std::thread;
 use std::vec::Vec;
+
+use wintun::Session;
 
 use crate::configuration::Configuration;
 use crate::device::Device as D;
 use crate::error::*;
-use wintun::Session;
-use std::process::Command;
-use std::task::{Context, Poll};
-use std::pin::Pin;
 
 /// A TUN device using the wintun driver.
 pub struct Device {
@@ -36,37 +36,35 @@ impl Device {
     /// Create a new `Device` for the given `Configuration`.
     pub fn new(config: &Configuration) -> Result<Self> {
         let wintun = unsafe { wintun::load() }.expect("Failed to load wintun dll");
-        let n = config.name.clone().unwrap_or("wintun".to_string());
-        let name = n.clone();
-        let adapter = match wintun::Adapter::open(&wintun, name.as_str()) {
+        let tun_name = config.name.as_deref().unwrap_or("wintun");
+        let adapter = match wintun::Adapter::create(&wintun, tun_name, tun_name, None) {
             Ok(a) => a,
-            Err(_) => wintun::Adapter::create(&wintun, name.as_str(), name.as_str(), None)
-                .expect("Failed to create wintun adapter!"),
+            Err(_) => wintun::Adapter::open(&wintun, tun_name)
+                .expect("Failed to open wintun adapter!"),
         };
-        let session = Arc::new(
-            adapter
-                .start_session(wintun::MAX_RING_CAPACITY)
-                .expect("Failed to create session")
-        );
+        let session = adapter
+            .start_session(wintun::MAX_RING_CAPACITY)
+            .map_err(|e| Error::InvalidConfig)?;
+        let session = Arc::new(session);
 
-        let address = config.address.clone()
+        let address = config
+            .address
+            .clone()
             .map_or_else(|| "10.1.0.2".to_string(), |a| a.to_string());
-        let destination = config.destination.clone()
+        let destination = config
+            .destination
+            .clone()
             .map_or_else(|| "".to_string(), |a| a.to_string());
-        let netmask = config.netmask.clone()
+        let netmask = config
+            .netmask
+            .clone()
             .map_or_else(|| "255.255.255.0".to_string(), |a| a.to_string());
-        let mtu = config.mtu.unwrap_or(1500);
-
-        let queue = Queue {
-            session,
-            cached: Arc::new(Mutex::new(Vec::with_capacity(mtu as usize))),
-        };
-        let mut device = Self { queue };
-
-        device.configure(&config)?;
         let out = Command::new("netsh")
-            .arg("interface").arg("ipv4").arg("set").arg("address")
-            .arg(name.as_str())
+            .arg("interface")
+            .arg("ipv4")
+            .arg("set")
+            .arg("address")
+            .arg(tun_name)
             .arg("static")
             .arg(address)
             .arg(netmask)
@@ -75,7 +73,14 @@ impl Device {
             .output()
             .expect("failed to execute command");
         assert!(out.status.success());
-
+        let mtu = config.mtu.unwrap_or(1500) as usize;
+        let mut device = Device {
+            queue: Queue {
+                session,
+                cached: Arc::new(Mutex::new(Vec::with_capacity(mtu))),
+            },
+        };
+        device.configure(&config)?;
         Ok(device)
     }
 
@@ -84,7 +89,7 @@ impl Device {
         cx: &mut Context<'_>,
         buf: &mut [u8],
     ) -> Poll<io::Result<usize>> {
-        Pin::new(&mut self.queue).poll_read(cx, buf)
+        Pin::new(&mut self.queue).poll_read(cx, rbuf)
     }
 }
 
@@ -103,12 +108,12 @@ impl Write for Device {
         return self.queue.write(buf);
     }
 
-    fn flush(&mut self) -> io::Result<()> {
-        return self.queue.flush();
-    }
-
     fn write_vectored(&mut self, bufs: &[io::IoSlice<'_>]) -> io::Result<usize> {
         self.queue.write_vectored(bufs)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        return self.queue.flush();
     }
 }
 
@@ -183,12 +188,13 @@ impl Queue {
         cx: &mut Context<'_>,
         mut buf: &mut [u8],
     ) -> Poll<io::Result<usize>> {
+        let buf = buf.initialize_unfilled();
         {
             let mut guard = self.cached.lock().unwrap();
             if guard.len() > 0 {
                 let res = match io::copy(&mut guard.as_slice(), &mut buf) {
                     Ok(n) => Poll::Ready(Ok(n as usize)),
-                    Err(e) => Poll::Ready(Err(e))
+                    Err(e) => Poll::Ready(Err(e)),
                 };
                 guard.clear();
                 return res;
@@ -197,12 +203,10 @@ impl Queue {
         let reader_session = self.session.clone();
         match reader_session.try_receive() {
             Err(_) => Poll::Ready(Err(io::Error::from(io::ErrorKind::Other))),
-            Ok(Some(packet)) => {
-                match io::copy(&mut packet.bytes(), &mut buf) {
-                    Ok(n) => Poll::Ready(Ok(n as usize)),
-                    Err(e) => Poll::Ready(Err(e))
-                }
-            }
+            Ok(Some(packet)) => match io::copy(&mut packet.bytes(), &mut buf) {
+                Ok(n) => Poll::Ready(Ok(n as usize)),
+                Err(e) => Poll::Ready(Err(e)),
+            },
             Ok(None) => {
                 let waker = cx.waker().clone();
                 let cached = self.cached.clone();
@@ -225,26 +229,12 @@ impl Queue {
             Err(_) => Err(io::Error::from(io::ErrorKind::Other)),
             Ok(op) => match op {
                 None => Ok(0),
-                Some(packet) => {
-                    match io::copy(&mut packet.bytes(), &mut buf) {
-                        Ok(s) => Ok(s as usize),
-                        Err(e) => Err(e)
-                    }
-                }
-            }
+                Some(packet) => match io::copy(&mut packet.bytes(), &mut buf) {
+                    Ok(s) => Ok(s as usize),
+                    Err(e) => Err(e),
+                },
+            },
         }
-    }
-}
-
-impl AsRawHandle for Queue {
-    fn as_raw_handle(&self) -> RawHandle {
-        todo!()
-    }
-}
-
-impl IntoRawHandle for Queue {
-    fn into_raw_handle(self) -> RawHandle {
-        todo!()
     }
 }
 
@@ -252,13 +242,11 @@ impl Read for Queue {
     fn read(&mut self, mut buf: &mut [u8]) -> io::Result<usize> {
         let reader_session = self.session.clone();
         match reader_session.receive_blocking() {
-            Ok(pkt) => {
-                match io::copy(&mut pkt.bytes(), &mut buf) {
-                    Ok(n) => Ok(n as usize),
-                    Err(e) => Err(e)
-                }
-            }
-            Err(_) => Err(io::Error::from(io::ErrorKind::ConnectionAborted))
+            Ok(pkt) => match io::copy(&mut pkt.bytes(), &mut buf) {
+                Ok(n) => Ok(n as usize),
+                Err(e) => Err(e),
+            },
+            Err(_) => Err(io::Error::from(io::ErrorKind::ConnectionAborted)),
         }
     }
 }
@@ -269,15 +257,13 @@ impl Write for Queue {
         let writer_session = self.session.clone();
         match writer_session.allocate_send_packet(size as u16) {
             Err(_) => Err(io::Error::from(io::ErrorKind::OutOfMemory)),
-            Ok(mut packet) => {
-                match io::copy(&mut buf, &mut packet.bytes_mut()) {
-                    Ok(s) => {
-                        writer_session.send_packet(packet);
-                        Ok(s as usize)
-                    }
-                    Err(e) => Err(e)
+            Ok(mut packet) => match io::copy(&mut buf, &mut packet.bytes_mut()) {
+                Ok(s) => {
+                    writer_session.send_packet(packet);
+                    Ok(s as usize)
                 }
-            }
+                Err(e) => Err(e),
+            },
         }
     }
 

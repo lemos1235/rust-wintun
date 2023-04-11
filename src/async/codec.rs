@@ -51,12 +51,11 @@ impl PacketProtocol {
             )),
         }
     }
-    // MARKER BEGIN
+
     #[cfg(target_os = "windows")]
     fn into_pi_field(&self) -> Result<u16, io::Error> {
         unimplemented!()
     }
-    // MARKER END
 }
 
 /// A Tun Packet to be sent or received on the TUN interface.
