@@ -75,16 +75,16 @@ impl AsyncWrite for AsyncDevice {
         buf: &[u8],
     ) -> Poll<Result<usize, Error>> {
         match self.inner.write(buf) {
-            Ok(n) => return Poll::Ready(Ok(n)),
-            Err(e) => return Poll::Ready(Err(e)),
+            Ok(n) => Poll::Ready(Ok(n)),
+            Err(e) => Poll::Ready(Err(e)),
         }
     }
 
     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
-        return match self.inner.flush() {
+         match self.inner.flush() {
             Ok(n) => Poll::Ready(Ok(n)),
             Err(e) => Poll::Ready(Err(e)),
-        };
+        }
     }
 
     fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
@@ -143,8 +143,8 @@ impl AsyncWrite for AsyncQueue {
         buf: &[u8],
     ) -> Poll<Result<usize, Error>> {
         match self.inner.write(buf) {
-            Ok(n) => return Poll::Ready(Ok(n)),
-            Err(e) => return Poll::Ready(Err(e)),
+            Ok(n) => Poll::Ready(Ok(n)),
+            Err(e) => Poll::Ready(Err(e)),
         }
     }
 

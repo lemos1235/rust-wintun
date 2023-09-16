@@ -49,15 +49,12 @@ impl Device {
 
         let address = config
             .address
-            .clone()
             .map_or_else(|| "10.1.0.2".to_string(), |a| a.to_string());
         let destination = config
             .destination
-            .clone()
             .map_or_else(|| "".to_string(), |a| a.to_string());
         let netmask = config
             .netmask
-            .clone()
             .map_or_else(|| "255.255.255.0".to_string(), |a| a.to_string());
         let out = Command::new("netsh")
             .arg("interface")
@@ -80,7 +77,7 @@ impl Device {
                 cached: Arc::new(Mutex::new(Vec::with_capacity(mtu))),
             },
         };
-        device.configure(&config)?;
+        device.configure(config)?;
         Ok(device)
     }
 
@@ -89,7 +86,7 @@ impl Device {
         cx: &mut Context<'_>,
         buf: &mut [u8],
     ) -> Poll<io::Result<usize>> {
-        Pin::new(&mut self.queue).poll_read(cx, rbuf)
+        Pin::new(&mut self.queue).poll_read(cx, buf)
     }
 }
 
@@ -173,7 +170,7 @@ impl D for Device {
     }
 
     fn queue(&mut self, index: usize) -> Option<&mut Self::Queue> {
-        return Some(&mut self.queue);
+        Some(&mut self.queue)
     }
 }
 
@@ -188,7 +185,6 @@ impl Queue {
         cx: &mut Context<'_>,
         mut buf: &mut [u8],
     ) -> Poll<io::Result<usize>> {
-        let buf = buf.initialize_unfilled();
         {
             let mut guard = self.cached.lock().unwrap();
             if guard.len() > 0 {
@@ -213,7 +209,7 @@ impl Queue {
                 thread::spawn(move || {
                     let mut guard = cached.lock().unwrap();
                     match reader_session.receive_blocking() {
-                        Ok(packet) => guard.extend_from_slice(&packet.bytes()),
+                        Ok(packet) => guard.extend_from_slice(packet.bytes()),
                         Err(e) => {}
                     }
                     waker.wake()
