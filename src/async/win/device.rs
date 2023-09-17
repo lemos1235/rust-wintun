@@ -81,7 +81,7 @@ impl AsyncWrite for AsyncDevice {
     }
 
     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
-         match self.inner.flush() {
+        match self.inner.flush() {
             Ok(n) => Poll::Ready(Ok(n)),
             Err(e) => Poll::Ready(Err(e)),
         }
@@ -125,13 +125,9 @@ impl AsyncRead for AsyncQueue {
         buf: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
         let rbuf = buf.initialize_unfilled();
-        match Pin::new(&mut self.inner).poll_read(cx, rbuf) {
-            Poll::Ready(Ok(n)) => {
-                buf.advance(n);
-                Poll::Ready(Ok(()))
-            }
-            Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
-            Poll::Pending => Poll::Pending,
+        match Pin::new(&mut self.inner).try_read(rbuf) {
+            Ok(n) if n > 0 => Poll::Ready(Ok(buf.advance(n))),
+            _ => Poll::Pending,
         }
     }
 }

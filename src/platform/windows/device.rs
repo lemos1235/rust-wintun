@@ -219,7 +219,7 @@ impl Queue {
         }
     }
 
-    fn try_read(&mut self, mut buf: &mut [u8]) -> io::Result<usize> {
+    pub fn try_read(&mut self, mut buf: &mut [u8]) -> io::Result<usize> {
         let reader_session = self.session.clone();
         match reader_session.try_receive() {
             Err(_) => Err(io::Error::from(io::ErrorKind::Other)),
